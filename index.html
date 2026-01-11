@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Viewport (inclui safe-area do iPhone com notch) -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+
+    <title>GFD – Gestão Financeira Descomplicada</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#4f46e5" />
+
+    <!-- Ícone padrão -->
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+
+    <!-- iOS: habilita “app-like” quando adicionar à tela inicial -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="GFD" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- iOS icons -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- (Opcional, mas recomendado) tamanhos iOS comuns -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-120.png" />
+
+    <!-- iOS splash (mínimo, simples) -->
+    <meta name="mobile-web-app-capable" content="yes" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
