@@ -1,5 +1,5 @@
 // =========================
-// RELATORIOS.JSX — PART 1/2
+// RELATORIOS.JSX — FINAL (MOBILE FRIENDLY)
 // =========================
 
 import { useEffect, useMemo, useState } from "react";
@@ -32,15 +32,37 @@ function money(n) {
     .format(Number(n || 0));
 }
 
+/** ✅ Formato compacto p/ eixo Y no celular */
+function compactMoney(v) {
+  const n = Number(v || 0);
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `R$ ${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `R$ ${(n / 1_000).toFixed(0)}k`;
+  return money(n);
+}
+
+/** ✅ Detecta mobile (sem SSR drama) */
+function useIsMobile(breakpoint = 720) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth <= breakpoint;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => setIsMobile(window.innerWidth <= breakpoint);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
 function ymd(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function ym(ano, mes) {
-  return `${ano}-${String(mes + 1).padStart(2, "0")}`;
 }
 
 function addMonths(ano, mes, delta) {
@@ -213,6 +235,7 @@ function CollapseSection({ title, subtitle, open, onToggle, children, rightSlot 
  */
 export default function Relatorios() {
   const hoje = new Date();
+  const isMobile = useIsMobile(720);
 
   /* ================= AUTH ================= */
   const [user, setUser] = useState(null);
@@ -482,9 +505,8 @@ export default function Relatorios() {
       .sort((a, b) => b.value - a.value);
   }, [lancamentos, incluirPendentes]);
 
-  // ✅ Top categorias com “Outros” (limpa quando tem muitas categorias)
+  // ✅ Top categorias com “Outros”
   const topCategorias = useMemo(() => {
-    // top 6 + “Outros” (total 7)
     return groupSmallCategoriesIntoOthers(despesasPorCategoria, 7, "Outros");
   }, [despesasPorCategoria]);
 
@@ -611,12 +633,7 @@ export default function Relatorios() {
       if (topCat) msg += ` Principal gasto: "${topCat}" (${money(topCatVal)}).`;
     }
 
-    return {
-      msg,
-      taxa,
-      topCat,
-      topCatVal,
-    };
+    return { msg, taxa, topCat, topCatVal };
   }, [lancamentos, totais.receitasTotal, totais.despesasTotal, despesasPorCategoria]);
 
   /* ================= EXPORTAR CSV ================= */
@@ -728,7 +745,7 @@ export default function Relatorios() {
     <div style={styles.page}>
       <div style={styles.frame}>
         <div style={styles.header}>
-          <div style={{ minWidth: 260 }}>
+          <div style={{ minWidth: isMobile ? 0 : 260 }}>
             <h2 style={{ margin: 0, letterSpacing: -0.3 }}>Relatórios — GFD</h2>
             <p style={{ marginTop: 6, color: "var(--muted)" }}>
               <b>{tituloPeriodo}</b>{" "}
@@ -827,7 +844,6 @@ export default function Relatorios() {
             Incluir pendentes
           </label>
 
-          {/* ✅ Toggle comparar */}
           <label style={styles.checkLabel}>
             <input
               type="checkbox"
@@ -930,15 +946,15 @@ export default function Relatorios() {
             {despesasPorCategoria.length === 0 ? (
               <EmptyState onClear={limparFiltros} />
             ) : (
-              <div style={{ height: 320 }}>
+              <div style={{ height: isMobile ? 260 : 320 }}>
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie
                       data={despesasPorCategoria}
                       dataKey="value"
                       nameKey="name"
-                      innerRadius={70}
-                      outerRadius={110}
+                      innerRadius={isMobile ? 55 : 70}
+                      outerRadius={isMobile ? 92 : 110}
                       paddingAngle={2}
                     >
                       {despesasPorCategoria.map((_, idx) => (
@@ -956,7 +972,7 @@ export default function Relatorios() {
                         />
                       )}
                     />
-                    <Legend wrapperStyle={{ color: "var(--text)", fontWeight: 800 }} />
+                    <Legend wrapperStyle={{ color: "var(--text)", fontWeight: 800, fontSize: isMobile ? 11 : 12 }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -972,19 +988,25 @@ export default function Relatorios() {
             {receitasPorCategoria.length === 0 ? (
               <EmptyState onClear={limparFiltros} />
             ) : (
-              <div style={{ height: 320 }}>
+              <div style={{ height: isMobile ? 280 : 320 }}>
                 <ResponsiveContainer>
                   <BarChart data={receitasPorCategoria}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
                     <XAxis
                       dataKey="name"
-                      interval={0}
-                      angle={-12}
-                      textAnchor="end"
-                      height={60}
+                      interval={isMobile ? 1 : 0}
+                      angle={isMobile ? 0 : -12}
+                      textAnchor={isMobile ? "middle" : "end"}
+                      height={isMobile ? 30 : 60}
+                      tick={{ fontSize: isMobile ? 11 : 12 }}
                       stroke="rgba(148,163,184,0.75)"
                     />
-                    <YAxis tickFormatter={(v) => money(v)} stroke="rgba(148,163,184,0.75)" />
+                    <YAxis
+                      width={isMobile ? 46 : 70}
+                      tick={{ fontSize: isMobile ? 11 : 12 }}
+                      tickFormatter={(v) => (isMobile ? compactMoney(v) : money(v))}
+                      stroke="rgba(148,163,184,0.75)"
+                    />
                     <Tooltip
                       content={({ active, payload, label }) => (
                         <TooltipCategoria
@@ -1012,12 +1034,23 @@ export default function Relatorios() {
             {topCategorias.length === 0 ? (
               <EmptyState onClear={limparFiltros} />
             ) : (
-              <div style={{ height: 320 }}>
+              <div style={{ height: isMobile ? 280 : 320 }}>
                 <ResponsiveContainer>
-                  <BarChart data={topCategorias} layout="vertical" margin={{ left: 20 }}>
+                  <BarChart data={topCategorias} layout="vertical" margin={{ left: 12, right: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
-                    <XAxis type="number" tickFormatter={(v) => money(v)} stroke="rgba(148,163,184,0.75)" />
-                    <YAxis type="category" dataKey="name" width={120} stroke="rgba(148,163,184,0.75)" />
+                    <XAxis
+                      type="number"
+                      tick={{ fontSize: isMobile ? 11 : 12 }}
+                      tickFormatter={(v) => (isMobile ? compactMoney(v) : money(v))}
+                      stroke="rgba(148,163,184,0.75)"
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={isMobile ? 92 : 120}
+                      tick={{ fontSize: isMobile ? 11 : 12 }}
+                      stroke="rgba(148,163,184,0.75)"
+                    />
                     <Tooltip
                       content={({ active, payload, label }) => (
                         <TooltipCategoria
@@ -1055,12 +1088,22 @@ export default function Relatorios() {
             {serieMov.length === 0 ? (
               <EmptyState onClear={limparFiltros} />
             ) : (
-              <div style={{ height: 340 }}>
+              <div style={{ height: isMobile ? 280 : 340 }}>
                 <ResponsiveContainer>
                   <BarChart data={serieMov}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
-                    <XAxis dataKey="label" stroke="rgba(148,163,184,0.75)" />
-                    <YAxis tickFormatter={(v) => money(v)} stroke="rgba(148,163,184,0.75)" />
+                    <XAxis
+                      dataKey="label"
+                      interval={isMobile ? 1 : 0}
+                      tick={{ fontSize: isMobile ? 11 : 12 }}
+                      stroke="rgba(148,163,184,0.75)"
+                    />
+                    <YAxis
+                      width={isMobile ? 46 : 70}
+                      tick={{ fontSize: isMobile ? 11 : 12 }}
+                      tickFormatter={(v) => (isMobile ? compactMoney(v) : money(v))}
+                      stroke="rgba(148,163,184,0.75)"
+                    />
                     <Tooltip
                       content={({ active, payload, label }) => (
                         <TooltipMov
@@ -1072,25 +1115,16 @@ export default function Relatorios() {
                         />
                       )}
                     />
-                    <Legend wrapperStyle={{ color: "var(--text)", fontWeight: 800 }} />
+                    <Legend wrapperStyle={{ color: "var(--text)", fontWeight: 800, fontSize: isMobile ? 11 : 12 }} />
                     <Bar dataKey="receitas" name="Receitas" fill={COLOR_RECEITAS} radius={[10,10,0,0]} />
                     <Bar dataKey="despesas" name="Despesas" fill={COLOR_DESPESAS} radius={[10,10,0,0]} />
 
-                    {/* Marcações Melhor/Pior dia (somente quando for por dia) */}
                     {granularity === "day" && bestWorstDay?.best ? (
-                      <ReferenceLine
-                        x={bestWorstDay.best.label}
-                        stroke="rgba(34,197,94,0.6)"
-                        strokeDasharray="4 4"
-                      />
+                      <ReferenceLine x={bestWorstDay.best.label} stroke="rgba(34,197,94,0.6)" strokeDasharray="4 4" />
                     ) : null}
 
                     {granularity === "day" && bestWorstDay?.worst ? (
-                      <ReferenceLine
-                        x={bestWorstDay.worst.label}
-                        stroke="rgba(239,68,68,0.6)"
-                        strokeDasharray="4 4"
-                      />
+                      <ReferenceLine x={bestWorstDay.worst.label} stroke="rgba(239,68,68,0.6)" strokeDasharray="4 4" />
                     ) : null}
                   </BarChart>
                 </ResponsiveContainer>
@@ -1124,16 +1158,19 @@ export default function Relatorios() {
             {saldoAcumulado.length === 0 ? (
               <EmptyState onClear={limparFiltros} />
             ) : (
-              <div style={{ height: 320 }}>
+              <div style={{ height: isMobile ? 260 : 320 }}>
                 <ResponsiveContainer>
                   <LineChart data={saldoAcumulado}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
-                    <XAxis dataKey="label" stroke="rgba(148,163,184,0.75)" />
-                    <YAxis tickFormatter={(v) => money(v)} stroke="rgba(148,163,184,0.75)" />
+                    <XAxis dataKey="label" tick={{ fontSize: isMobile ? 11 : 12 }} stroke="rgba(148,163,184,0.75)" />
+                    <YAxis
+                      width={isMobile ? 46 : 70}
+                      tick={{ fontSize: isMobile ? 11 : 12 }}
+                      tickFormatter={(v) => (isMobile ? compactMoney(v) : money(v))}
+                      stroke="rgba(148,163,184,0.75)"
+                    />
                     <Tooltip contentStyle={styles.tooltip} formatter={(v) => money(v)} />
-
                     <ReferenceLine y={0} stroke="rgba(148,163,184,0.35)" />
-
                     <Line
                       type="monotone"
                       dataKey="saldo"
@@ -1197,7 +1234,7 @@ export default function Relatorios() {
                           alignItems: "center",
                         }}
                       >
-                        <div style={{ minWidth: 260 }}>
+                        <div style={{ minWidth: 240 }}>
                           <div style={{ fontWeight: 950, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                             <span style={{
                               ...styles.pill,
@@ -1240,7 +1277,6 @@ export default function Relatorios() {
             </div>
           )}
         </CollapseSection>
-
       </div>
     </div>
   );
@@ -1287,12 +1323,13 @@ const styles = {
     overflow: "visible",
   },
 
+  /** ✅ sem margin lateral que estoura no mobile + safe-area */
   frame: {
     width: "100%",
     boxSizing: "border-box",
-    margin: "0 10px",
-    padding: 16,
-    overflow: "visible",
+    margin: "0 auto",
+    padding: "max(14px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 14px max(12px, env(safe-area-inset-left))",
+    overflow: "hidden",
   },
 
   header: {
@@ -1434,10 +1471,11 @@ const styles = {
     fontSize: 12,
   },
 
+  /** ✅ min 260 pra não estourar no mobile */
   grid: {
     marginTop: 14,
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
     gap: 12
   },
 

@@ -24,23 +24,15 @@ export default function Login({ theme, setTheme }) {
 
     const em = (email || "").trim().toLowerCase();
     const pw = senha || "";
-
     if (!em || !pw) return;
 
     setLoading(true);
-
     try {
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: em,
-          password: pw,
-        });
+        const { error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({
-          email: em,
-          password: pw,
-        });
+        const { error } = await supabase.auth.signUp({ email: em, password: pw });
         if (error) throw error;
         setMsg("Conta criada! Se o Supabase exigir confirmação, verifique seu e-mail.");
       }
@@ -68,9 +60,9 @@ export default function Login({ theme, setTheme }) {
   }
 
   return (
-    <div style={styles.wrap}>
-      <div style={styles.loginShell}>
-        <div style={styles.hero}>
+    <div className="gfd-login-wrap" style={styles.wrap}>
+      <div className="gfd-login-shell" style={styles.loginShell}>
+        <div className="gfd-login-hero" style={styles.hero}>
           <div style={styles.brand}>
             <LogoBig />
             <div>
@@ -83,6 +75,7 @@ export default function Login({ theme, setTheme }) {
             <h2 style={{ margin: 0, letterSpacing: -0.4 }}>
               Controle suas finanças com clareza.
             </h2>
+
             <p style={{ marginTop: 10, color: "var(--muted)", fontWeight: 800, lineHeight: 1.45 }}>
               Fixas automáticas, parcelamentos, lembretes de vencimento e relatórios completos.
               Pronto para celular e computador.
@@ -97,7 +90,7 @@ export default function Login({ theme, setTheme }) {
           </div>
         </div>
 
-        <div style={styles.card}>
+        <div className="gfd-login-card" style={styles.card}>
           <div style={styles.cardTop}>
             <div>
               <div style={{ fontWeight: 1000, fontSize: 18, letterSpacing: -0.2 }}>
@@ -112,6 +105,7 @@ export default function Login({ theme, setTheme }) {
               onClick={() => setTheme((p) => (p === "dark" ? "light" : "dark"))}
               style={styles.ghostBtn}
               title="Alternar tema"
+              type="button"
             >
               {dark ? "🌙 Dark" : "☀️ Light"}
             </button>
@@ -126,6 +120,7 @@ export default function Login({ theme, setTheme }) {
                 placeholder="seuemail@exemplo.com"
                 style={styles.input}
                 autoComplete="email"
+                inputMode="email"
               />
             </label>
 
@@ -141,11 +136,7 @@ export default function Login({ theme, setTheme }) {
               />
             </label>
 
-            {msg && (
-              <div style={styles.msg}>
-                {msg}
-              </div>
-            )}
+            {msg && <div style={styles.msg}>{msg}</div>}
 
             <button disabled={!canSubmit} style={styles.primaryBtn} type="submit">
               {loading ? "Aguarde..." : (mode === "login" ? "Entrar" : "Criar conta")}
@@ -181,9 +172,12 @@ export default function Login({ theme, setTheme }) {
 
 const styles = {
   wrap: {
+    width: "100%",
     maxWidth: 1100,
     margin: "0 auto",
-    padding: 16,
+    padding: "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left))",
+    minHeight: "100dvh",
+    boxSizing: "border-box",
   },
 
   loginShell: {
@@ -204,11 +198,7 @@ const styles = {
     WebkitBackdropFilter: "blur(10px)",
   },
 
-  brand: {
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-  },
+  brand: { display: "flex", gap: 10, alignItems: "center" },
 
   title: { fontWeight: 1000, fontSize: 20, letterSpacing: -0.4 },
   subtitle: { color: "var(--muted)", fontWeight: 800, fontSize: 12, marginTop: 3 },
@@ -340,7 +330,7 @@ function LogoBig() {
   );
 }
 
-/* Responsivo sem CSS externo */
+/* ✅ Responsivo real */
 if (typeof document !== "undefined") {
   const id = "gfd-login-responsive";
   if (!document.getElementById(id)) {
@@ -349,6 +339,7 @@ if (typeof document !== "undefined") {
     style.textContent = `
       @media (max-width: 920px){
         .gfd-login-shell { grid-template-columns: 1fr !important; }
+        .gfd-login-hero { min-height: auto !important; }
       }
     `;
     document.head.appendChild(style);
