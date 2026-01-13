@@ -23,7 +23,9 @@ function addDays(date, days) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
@@ -31,6 +33,7 @@ export default async function handler(req, res) {
     // ✅ Validar token (o mesmo que aparece no print da Kiwify)
     const receivedToken = readToken(req, body);
     const expectedToken = (process.env.KIWIFY_WEBHOOK_TOKEN || "").trim();
+
     if (!expectedToken) {
       return res.status(500).json({ ok: false, error: "Missing KIWIFY_WEBHOOK_TOKEN env" });
     }
@@ -38,10 +41,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ ok: false, error: "Invalid webhook token" });
     }
 
-    /**
-     * ⚠️ A estrutura exata do payload pode variar.
-     * Por isso, pegamos email e status de vários lugares possíveis.
-     */
+    // Email tolerante (payload pode variar)
     const email =
       body?.customer?.email ||
       body?.buyer?.email ||
@@ -52,6 +52,8 @@ export default async function handler(req, res) {
     if (!email) {
       return res.status(400).json({ ok: false, error: "Missing customer email in payload" });
     }
+
+    const emailNorm = email.toLowerCase().trim();
 
     // Identificar evento/status de forma tolerante
     const event =
@@ -69,18 +71,15 @@ export default async function handler(req, res) {
 
     const norm = `${event} ${status}`.toLowerCase();
 
-    // ✅ Regra base:
-    // - pagamento aprovado / assinatura ativa => libera
-    // - cancelado / estornado / chargeback / atrasado => bloqueia novos lançamentos
-    let access_status = "inactive";
-    let subscription_status = "inactive";
-
+    // ✅ Define o que libera / bloqueia
     const isPaid =
       norm.includes("paid") ||
       norm.includes("approved") ||
       norm.includes("aprov") ||
       norm.includes("active") ||
-      norm.includes("assinatura_ativa");
+      norm.includes("assinatura_ativa") ||
+      norm.includes("renewed") ||
+      norm.includes("renew");
 
     const isBlocked =
       norm.includes("canceled") ||
@@ -91,47 +90,60 @@ export default async function handler(req, res) {
       norm.includes("past_due") ||
       norm.includes("overdue") ||
       norm.includes("inadimpl") ||
-      norm.includes("expired");
+      norm.includes("expired") ||
+      norm.includes("refused") ||
+      norm.includes("recused");
 
-    if (isPaid) {
-      access_status = "active";
-      subscription_status = "active";
-    } else if (isBlocked) {
-      access_status = "inactive";
-      subscription_status = "inactive";
-    } else {
-      // Se vier evento desconhecido, não quebra — só registra como ok
-      return res.status(200).json({ ok: true, ignored: true });
+    if (!isPaid && !isBlocked) {
+      // evento desconhecido: não quebra
+      return res.status(200).json({ ok: true, ignored: true, norm });
     }
 
-    // ✅ Atualiza pelo email (importante: o usuário precisa se cadastrar no app com o mesmo email da compra)
-    // Extende acesso por 30 dias quando pago (pode mudar para 31, etc.)
-    const now = new Date().toISOString();
-    const newAccessUntil = addDays(new Date(), 30);
-
-    const { data: updated, error } = await supabase
+    // ✅ Busca o profile pra:
+    // 1) confirmar que existe
+    // 2) respeitar acessos manuais (admin/promo/parceria)
+    const { data: prof, error: profErr } = await supabase
       .from("profiles")
-      .update({
-        subscription_status,
-        access_status,
-        access_until: access_status === "active" ? newAccessUntil : null,
-        email: email.toLowerCase().trim(),
-        updated_at: now, // se você tiver essa coluna (se não tiver, pode remover)
-      })
-      .eq("email", email.toLowerCase().trim())
-      .select("id,email,access_status,access_until,subscription_status");
+      .select("id, email, access_origin")
+      .eq("email", emailNorm)
+      .maybeSingle();
 
-    if (error) throw error;
+    if (profErr) throw profErr;
 
-    // Se não achou profile, provavelmente a pessoa comprou antes de criar conta no app
-    if (!updated || updated.length === 0) {
+    if (!prof) {
+      // pessoa comprou antes de criar conta no app
       return res.status(200).json({
         ok: true,
         warning: "No profile found for this email. User must sign up in the app with same email.",
       });
     }
 
-    return res.status(200).json({ ok: true, updated: updated[0] });
+    // ✅ NÃO sobrescreve acesso manual/promo
+    if (prof.access_origin === "admin" || prof.access_origin === "promo") {
+      return res.status(200).json({ ok: true, skipped: "manual_access_protected" });
+    }
+
+    // ✅ Atualização final
+    // - Pago: libera por 30 dias (você pode trocar para 31)
+    // - Bloqueado: remove acesso
+    const updates = {
+      email: emailNorm,
+      subscription_status: isPaid ? "active" : "inactive",
+      access_status: isPaid ? "active" : "inactive",
+      access_until: isPaid ? addDays(new Date(), 30) : null,
+      access_origin: isPaid ? "paid" : "paid", // mantém como paid (sem virar admin/promo)
+    };
+
+    const { data: updated, error: upErr } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", prof.id)
+      .select("id,email,access_status,access_until,subscription_status,access_origin")
+      .maybeSingle();
+
+    if (upErr) throw upErr;
+
+    return res.status(200).json({ ok: true, updated, norm });
   } catch (e) {
     return res.status(400).json({ ok: false, error: e?.message || "Webhook error" });
   }
