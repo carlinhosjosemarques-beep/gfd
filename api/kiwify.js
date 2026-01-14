@@ -1,6 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
+export const config = {
+  api: {
+    bodyParser: false, // ✅ necessário para ler o RAW body e validar signature
+  },
+};
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY // ⚠️ NUNCA expor no front
@@ -14,82 +20,51 @@ function maskToken(t) {
   return `${s.slice(0, 3)}***${s.slice(-3)}(len=${s.length})`;
 }
 
-// ✅ pega token do header / body / query (Kiwify pode variar)
-function readToken(req, body) {
-  const h = req.headers || {};
-
-  const headerCandidates = [
-    h["x-kiwify-token"],
-    h["x-webhook-token"],
-    h["x-kiwify-webhook-token"],
-    h["x-kiwify-secret"],
-    h["x-hook-token"],
-    h["x-token"],
-    h["authorization"],
-  ];
-
-  const headerTokenRaw = headerCandidates.find(Boolean) || "";
-  const headerToken =
-    typeof headerTokenRaw === "string"
-      ? headerTokenRaw.replace(/^Bearer\s+/i, "").trim()
-      : Array.isArray(headerTokenRaw)
-        ? String(headerTokenRaw[0] || "").trim()
-        : "";
-
-  const bodyToken =
-    (body?.token ||
-      body?.Token ||
-      body?.webhook_token ||
-      body?.webhookToken ||
-      body?.secret ||
-      body?.Secret ||
-      body?.data?.token ||
-      body?.data?.webhook_token ||
-      body?.data?.secret ||
-      "").toString().trim();
-
-  const queryToken =
-    (req.query?.token || req.query?.webhook_token || req.query?.secret || "")
-      .toString()
-      .trim();
-
-  return headerToken || bodyToken || queryToken || "";
+async function readRawBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks);
 }
 
-// ✅ pega signature (quando a Kiwify mandar assinatura em vez de token)
+function timingSafeEq(a, b) {
+  const ba = Buffer.from(String(a || ""), "utf8");
+  const bb = Buffer.from(String(b || ""), "utf8");
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+// ✅ Pega signature (Kiwify está mandando via query ?signature=...)
 function readSignature(req) {
-  const h = req.headers || {};
   const q = req.query || {};
+  const h = req.headers || {};
 
-  // query: ?signature=...
-  const qs = (q.signature || q.sig || "").toString().trim();
-
-  // headers (se vier)
-  const hs =
+  const sigQuery = (q.signature || q.sig || "").toString().trim();
+  const sigHeader =
     (h["x-kiwify-signature"] ||
       h["x-webhook-signature"] ||
       h["x-signature"] ||
-      "")
-      .toString()
-      .trim();
+      "").toString().trim();
 
-  return qs || hs || "";
+  return sigQuery || sigHeader || "";
 }
 
-// ✅ valida assinatura HMAC SHA1 (40 chars = bem provável que seja sha1 hex)
-function isValidSignature({ signature, secret, rawBody }) {
-  if (!signature || !secret) return false;
+// ✅ (fallback) se um dia a Kiwify mandar token fixo no header
+function readFixedToken(req, body) {
+  const h = req.headers || {};
+  const headerToken =
+    (h["x-kiwify-token"] ||
+      h["x-webhook-token"] ||
+      h["authorization"] ||
+      "").toString().replace(/^Bearer\s+/i, "").trim();
 
-  const expected = crypto
-    .createHmac("sha1", secret)
-    .update(rawBody, "utf8")
-    .digest("hex");
+  const bodyToken =
+    (body?.token || body?.webhook_token || body?.secret || "").toString().trim();
 
-  // timing-safe compare
-  const a = Buffer.from(signature);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  return headerToken || bodyToken || "";
+}
+
+function computeHmacSha1Hex(secret, rawBodyBuffer) {
+  return crypto.createHmac("sha1", secret).update(rawBodyBuffer).digest("hex");
 }
 
 function addDays(date, days) {
@@ -99,65 +74,89 @@ function addDays(date, days) {
 }
 
 export default async function handler(req, res) {
-  // ✅ Preflight
   if (req.method === "OPTIONS") return res.status(200).end();
-
   if (req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  try {
-    const secret = (process.env.KIWIFY_WEBHOOK_TOKEN || "").trim();
-    const debug = String(process.env.DEBUG_WEBHOOK || "").trim() === "true";
+  const debug = String(process.env.DEBUG_WEBHOOK || "").trim() === "true";
 
+  try {
+    const secret = (process.env.KIWIFY_WEBHOOK_SECRET || "").trim();
     if (!secret) {
       return res.status(500).json({
         ok: false,
-        error: "Missing KIWIFY_WEBHOOK_TOKEN env",
+        error: "Missing KIWIFY_WEBHOOK_SECRET env",
       });
     }
 
-    // body (Vercel às vezes manda string)
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
-    const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(body);
+    // ✅ raw body
+    const raw = await readRawBody(req);
+    const rawText = raw.toString("utf8") || "";
 
-    const receivedToken = readToken(req, body);
-    const signature = readSignature(req);
+    // ✅ parse body (se vier vazio ou inválido, não quebra)
+    let body = {};
+    try {
+      body = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      body = {};
+    }
 
-    // ✅ 1) Se vier token fixo, valida por igualdade
-    const tokenOk = !!receivedToken && receivedToken === secret;
-
-    // ✅ 2) Se vier signature, valida HMAC
-    const sigOk = !!signature && isValidSignature({ signature, secret, rawBody });
+    // ✅ 1) Validação por SIGNATURE (se vier)
+    const receivedSig = readSignature(req);
 
     if (debug) {
       console.log("[KIWIFY] secret:", maskToken(secret));
-      console.log("[KIWIFY] token received:", maskToken(receivedToken));
-      console.log("[KIWIFY] signature received:", maskToken(signature));
-      console.log("[KIWIFY] tokenOk:", tokenOk, "sigOk:", sigOk);
-      console.log("[KIWIFY] headers keys:", Object.keys(req.headers || {}));
+      console.log("[KIWIFY] signature received:", maskToken(receivedSig));
       console.log("[KIWIFY] query keys:", Object.keys(req.query || {}));
+      console.log("[KIWIFY] headers keys:", Object.keys(req.headers || {}));
       console.log("[KIWIFY] body keys:", Object.keys(body || {}));
+      console.log("[KIWIFY] raw len:", raw.length);
     }
 
-    // ✅ Se nem token nem assinatura baterem → 401
-    if (!tokenOk && !sigOk) {
-      return res.status(401).json({
-        ok: false,
-        error: "Unauthorized (token/signature mismatch)",
-        hint: debug
-          ? {
-              secret: maskToken(secret),
-              token: maskToken(receivedToken),
-              signature: maskToken(signature),
-              tokenOk,
-              sigOk,
-            }
-          : undefined,
-      });
+    if (receivedSig) {
+      const expectedSig = computeHmacSha1Hex(secret, raw);
+
+      if (debug) {
+        console.log("[KIWIFY] signature expected:", maskToken(expectedSig));
+      }
+
+      if (!timingSafeEq(receivedSig, expectedSig)) {
+        return res.status(401).json({
+          ok: false,
+          error: "Invalid signature",
+          hint: debug
+            ? { received: maskToken(receivedSig), expected: maskToken(expectedSig) }
+            : undefined,
+        });
+      }
+    } else {
+      // ✅ 2) fallback: token fixo (caso você mude no painel da Kiwify)
+      const tokenExpected = (process.env.KIWIFY_WEBHOOK_TOKEN || "").trim();
+      const tokenReceived = readFixedToken(req, body);
+
+      if (!tokenExpected) {
+        return res.status(401).json({
+          ok: false,
+          error:
+            "No signature received and KIWIFY_WEBHOOK_TOKEN is not set (configure one auth method).",
+        });
+      }
+
+      if (debug) {
+        console.log("[KIWIFY] token expected:", maskToken(tokenExpected));
+        console.log("[KIWIFY] token received:", maskToken(tokenReceived));
+      }
+
+      if (tokenReceived !== tokenExpected) {
+        return res.status(401).json({
+          ok: false,
+          error: "Invalid webhook token",
+        });
+      }
     }
 
-    // Email tolerante (payload pode variar)
+    // ✅ daqui pra baixo: seu fluxo normal
     const email =
       body?.customer?.email ||
       body?.buyer?.email ||
@@ -171,7 +170,6 @@ export default async function handler(req, res) {
 
     const emailNorm = email.toLowerCase().trim();
 
-    // Identificar evento/status de forma tolerante
     const event =
       body?.event ||
       body?.type ||
@@ -181,14 +179,13 @@ export default async function handler(req, res) {
 
     const status =
       body?.status ||
-      body?.order_status ||           // <- aparece no seu body_keys
       body?.data?.status ||
       body?.subscription?.status ||
+      body?.order_status ||
       "";
 
     const norm = `${event} ${status}`.toLowerCase();
 
-    // ✅ Define o que libera / bloqueia
     const isPaid =
       norm.includes("paid") ||
       norm.includes("approved") ||
@@ -215,7 +212,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, ignored: true, norm });
     }
 
-    // ✅ Busca profile
     const { data: prof, error: profErr } = await supabase
       .from("profiles")
       .select("id, email, access_origin")
@@ -231,12 +227,10 @@ export default async function handler(req, res) {
       });
     }
 
-    // ✅ NÃO sobrescreve acesso manual/promo
     if (prof.access_origin === "admin" || prof.access_origin === "promo") {
       return res.status(200).json({ ok: true, skipped: "manual_access_protected" });
     }
 
-    // ✅ Atualização final
     const updates = {
       email: emailNorm,
       subscription_status: isPaid ? "active" : "inactive",
@@ -254,7 +248,7 @@ export default async function handler(req, res) {
 
     if (upErr) throw upErr;
 
-    return res.status(200).json({ ok: true, updated, norm, auth: sigOk ? "signature" : "token" });
+    return res.status(200).json({ ok: true, updated, norm });
   } catch (e) {
     console.error("[KIWIFY] error:", e);
     return res.status(400).json({ ok: false, error: e?.message || "Webhook error" });
