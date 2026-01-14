@@ -1,3 +1,8 @@
+// ✅ AJUSTE PONTUAL: CANWRITE (ASSINATURA) NO RELATORIOS.JSX
+// - NÃO remove nada do que funciona
+// - Só adiciona o "canWrite" e bloqueia exportação/uso quando não assinado
+// - Mantém seu layout e lógica
+
 // =========================
 // RELATORIOS.JSX — FINAL (MOBILE FRIENDLY)
 // =========================
@@ -241,6 +246,10 @@ export default function Relatorios() {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
 
+  // ✅ CANWRITE/ASSINATURA
+  const [canWrite, setCanWrite] = useState(false);
+  const [planLoading, setPlanLoading] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
@@ -252,6 +261,41 @@ export default function Relatorios() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // ✅ Busca status da assinatura e seta canWrite
+  // Regras:
+  // - se existir tabela "assinaturas" com (user_id, status) => status "active" libera
+  // - se não existir / falhar, fica false (bloqueado)
+  useEffect(() => {
+    if (!user) {
+      setCanWrite(false);
+      return;
+    }
+
+    (async () => {
+      setPlanLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("assinaturas")
+          .select("status, plano, expires_at")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.warn("Assinatura: erro ao consultar, mantendo bloqueado.", error);
+          setCanWrite(false);
+        } else {
+          const status = String(data?.status || "").toLowerCase();
+          setCanWrite(status === "active" || status === "ativa" || status === "paid");
+        }
+      } catch (e) {
+        console.warn("Assinatura: exceção, mantendo bloqueado.", e);
+        setCanWrite(false);
+      } finally {
+        setPlanLoading(false);
+      }
+    })();
+  }, [user]);
 
   /* ================= PERÍODO (MODO) ================= */
   const [periodMode, setPeriodMode] = useState("mensal"); // mensal | 3m | 6m | anual | custom
@@ -638,6 +682,9 @@ export default function Relatorios() {
 
   /* ================= EXPORTAR CSV ================= */
   function exportarCsv() {
+    // ✅ BLOQUEIO POR ASSINATURA (canWrite)
+    if (!canWrite) return;
+
     const rows = (lancamentos || []).map(l => ({
       data: l.data,
       tipo: l.tipo,
@@ -741,6 +788,14 @@ export default function Relatorios() {
 
   const saldoDoi = totais.saldoTotal < 0;
 
+  // ✅ UI: se não assinado, botão export fica bloqueado
+  const exportDisabled = planLoading || !canWrite;
+  const exportTitle = planLoading
+    ? "Verificando assinatura…"
+    : !canWrite
+      ? "Apenas assinantes podem exportar CSV."
+      : "Exportar CSV";
+
   return (
     <div style={styles.page}>
       <div style={styles.frame}>
@@ -755,10 +810,38 @@ export default function Relatorios() {
                 </span>
               ) : null}
             </p>
+
+            {/* ✅ Aviso discreto de assinatura */}
+            {!planLoading && !canWrite ? (
+              <div style={{
+                marginTop: 8,
+                display: "inline-flex",
+                gap: 8,
+                alignItems: "center",
+                padding: "8px 10px",
+                borderRadius: 14,
+                border: "1px solid rgba(234,179,8,.35)",
+                background: "rgba(234,179,8,.10)",
+                color: "var(--text)",
+                fontWeight: 950,
+                fontSize: 12,
+              }}>
+                🔒 Exportação disponível apenas para assinantes.
+              </div>
+            ) : null}
           </div>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <button onClick={exportarCsv} style={styles.btn}>
+            <button
+              onClick={exportarCsv}
+              style={{
+                ...styles.btn,
+                opacity: exportDisabled ? 0.55 : 1,
+                cursor: exportDisabled ? "not-allowed" : "pointer",
+              }}
+              disabled={exportDisabled}
+              title={exportTitle}
+            >
               ⬇ Exportar CSV
             </button>
           </div>

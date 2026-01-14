@@ -1,3 +1,7 @@
+/* =========================
+   METAS.JSX — PARTE 1/2
+   ========================= */
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 
@@ -15,7 +19,7 @@ function ymd(d) {
 
 /* =========================================================
    ✅ CORREÇÃO DEFINITIVA DE TIMEZONE (sem “um dia a menos”)
-   - Evita new Date("YYYY-MM-DD") (isso é UTC e pode voltar 1 dia no Brasil)
+   - Evita new Date("YYYY-MM-DD") (UTC)
    - Sempre parse como data LOCAL: new Date(y, m-1, d)
 ========================================================= */
 function parseYmdLocal(ymdStr) {
@@ -34,14 +38,11 @@ function toYmdFromAnyInput(s) {
   if (!s) return "";
   const str = String(s).trim();
 
-  // já vem certinho
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
 
-  // tenta extrair de ISO/strings que contenham YYYY-MM-DD
   const m = str.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
 
-  // fallback: tenta Date() e normaliza para ymd local
   try {
     const d = new Date(str);
     if (Number.isNaN(d.getTime())) return "";
@@ -133,7 +134,6 @@ function pickMotivation({ pct, isLate, done, streak }) {
 
 /* ===== Desafio (streak) ===== */
 function weekKey(dOrYmd) {
-  // ✅ aceita Date, "YYYY-MM-DD" ou ISO; sempre calcula em LOCAL
   if (dOrYmd instanceof Date) {
     const dt0 = new Date(dOrYmd.getFullYear(), dOrYmd.getMonth(), dOrYmd.getDate());
     dt0.setHours(0, 0, 0, 0);
@@ -230,17 +230,20 @@ async function pedirPermissaoNotif() {
   else alert("✅ Notificações ativadas!");
 }
 
-/* ===== Ícones sugeridos (desktop friendly) ===== */
+/* ===== Ícones sugeridos ===== */
 const ICONES_SUGERIDOS = [
   "🎯", "💰", "🏦", "📈", "🧾", "💳", "🏠", "🚗",
   "✈️", "🎓", "🩺", "🛒", "🍽️", "🎮", "📚", "🔧",
   "👶", "🐶", "🏋️", "🎁", "🧠", "💡", "🔥", "🌱",
 ];
-
-// Mostra poucos por padrão (fica leve)
 const ICONES_PADRAO_QTD = 10;
 
-export default function Metas() {
+/**
+ * ✅ Metas recebe canWrite:
+ * - canWrite=false => somente leitura (trava criar/editar/excluir/progresso/check-in)
+ */
+export default function Metas({ canWrite = false }) {
+  const canMutate = !!canWrite;
   const hojeYmd = useMemo(() => ymd(new Date()), []);
 
   /* ================= AUTH ================= */
@@ -264,7 +267,6 @@ export default function Metas() {
   const [uiShowAtivas, setUiShowAtivas] = useState(true);
   const [uiShowArquivadas, setUiShowArquivadas] = useState(false);
 
-  // ✅ novo: recolher ícones
   const [uiIconsNovaOpen, setUiIconsNovaOpen] = useState(false);
   const [uiIconsEditOpen, setUiIconsEditOpen] = useState(false);
 
@@ -383,28 +385,27 @@ export default function Metas() {
   const [mAlvo, setMAlvo] = useState("");
   const [mInicial, setMInicial] = useState("");
 
-  // data início e fim
   const [mInicio, setMInicio] = useState(() => hojeYmd);
   const [mFim, setMFim] = useState("");
 
-  // ícone / cor
   const [mIcone, setMIcone] = useState("🎯");
   const [mCor, setMCor] = useState("#2563EB");
-  const [mIconeCustom, setMIconeCustom] = useState(""); // opcional
+  const [mIconeCustom, setMIconeCustom] = useState("");
 
-  // limite automático por categoria
   const [mCategoriaLimite, setMCategoriaLimite] = useState("Outros");
 
-  // desafio
   const [mDesafioAtivo, setMDesafioAtivo] = useState(false);
-  const [mDesafioFreq, setMDesafioFreq] = useState("semanal"); // diario | semanal
+  const [mDesafioFreq, setMDesafioFreq] = useState("semanal");
 
-  // lembretes
   const [mLembreteAtivo, setMLembreteAtivo] = useState(false);
   const [mLembreteHora, setMLembreteHora] = useState("08:30");
 
   async function criarMeta() {
     if (!user) return;
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para criar/editar metas.");
+      return;
+    }
 
     const titulo = String(mTitulo || "").trim();
     const alvo = clampNumber(mAlvo);
@@ -494,7 +495,7 @@ export default function Metas() {
     setMLembreteAtivo(false);
     setMLembreteHora("08:30");
 
-    setUiIconsNovaOpen(false); // ✅ recolhe ícones
+    setUiIconsNovaOpen(false);
     await carregarTudo();
     setUiShowAtivas(true);
     alert("✅ Meta criada!");
@@ -689,6 +690,11 @@ export default function Metas() {
   async function salvarAdd() {
     if (!user || !addMeta) return;
 
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para registrar progresso.");
+      return;
+    }
+
     if (addMeta.modoLimiteAuto) {
       alert("Essa meta é de limite automático por categoria. O progresso é calculado sozinho pelo gasto do mês.");
       return;
@@ -705,7 +711,7 @@ export default function Metas() {
       .insert({
         user_id: user.id,
         meta_id: addMeta.id,
-        data: clampDateStr(addData) || hojeYmd, // ✅ garante YYYY-MM-DD sem timezone bug
+        data: clampDateStr(addData) || hojeYmd,
         valor: v,
         nota: addNota ? String(addNota).slice(0, 200) : null,
       });
@@ -724,6 +730,12 @@ export default function Metas() {
   /* ================= DESAFIO: CHECK-IN ================= */
   async function fazerCheckin(meta) {
     if (!user || !meta) return;
+
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para usar check-in.");
+      return;
+    }
+
     if (!meta.desafio_ativo) {
       alert("Ative o modo desafio nesta meta para usar check-in.");
       return;
@@ -772,6 +784,11 @@ export default function Metas() {
   const [eLembreteHora, setELembreteHora] = useState("08:30");
 
   function abrirEditar(meta) {
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para editar metas.");
+      return;
+    }
+
     setEditMeta(meta);
 
     setETitulo(meta.titulo || "");
@@ -792,12 +809,17 @@ export default function Metas() {
     setELembreteAtivo(!!meta.lembrete_ativo);
     setELembreteHora(meta.lembrete_hora || "08:30");
 
-    setUiIconsEditOpen(false); // ✅ recolhe ícones ao abrir
+    setUiIconsEditOpen(false);
     setEditOpen(true);
   }
 
   async function salvarEditar() {
     if (!user || !editMeta) return;
+
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para salvar alterações.");
+      return;
+    }
 
     const titulo = String(eTitulo || "").trim();
     const alvo = clampNumber(eAlvo);
@@ -859,6 +881,11 @@ export default function Metas() {
 
   async function arquivarMeta(meta) {
     if (!user) return;
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para arquivar.");
+      return;
+    }
+
     const ok = confirm("Arquivar esta meta? (Você pode ver depois em Arquivadas)");
     if (!ok) return;
 
@@ -879,6 +906,10 @@ export default function Metas() {
 
   async function reativarMeta(meta) {
     if (!user) return;
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para reativar.");
+      return;
+    }
 
     const { error } = await supabase
       .from("metas")
@@ -897,6 +928,10 @@ export default function Metas() {
 
   async function excluirMeta(meta) {
     if (!user || !meta) return;
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para excluir.");
+      return;
+    }
 
     const ok = confirm(
       `Excluir a meta "${meta.titulo}"?\n\nIsso apaga também progressos e check-ins. Essa ação não pode ser desfeita.`
@@ -953,6 +988,12 @@ export default function Metas() {
             <p style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900 }}>
               Planeje, acompanhe e comemore o progresso.
             </p>
+
+            {!canMutate ? (
+              <div style={{ ...styles.readOnlyBar }}>
+                🔒 Modo somente leitura (assinatura necessária para criar/editar/progresso/check-in)
+              </div>
+            ) : null}
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -1032,9 +1073,15 @@ export default function Metas() {
                 onChange={(e) => setMTitulo(e.target.value)}
                 placeholder="Nome da meta (ex: Reserva de emergência)"
                 style={{ ...styles.input, minWidth: 240 }}
+                disabled={!canMutate}
               />
 
-              <select value={mTipo} onChange={(e) => setMTipo(e.target.value)} style={styles.select}>
+              <select
+                value={mTipo}
+                onChange={(e) => setMTipo(e.target.value)}
+                style={styles.select}
+                disabled={!canMutate}
+              >
                 {tiposCriacao.map(t => (
                   <option key={t.v} value={t.v}>{t.label}</option>
                 ))}
@@ -1045,6 +1092,7 @@ export default function Metas() {
                 onChange={(e) => setMAlvo(e.target.value)}
                 placeholder="Valor alvo (ex: 5000 ou 5000,00)"
                 style={styles.input}
+                disabled={!canMutate}
               />
 
               {mTipo !== "limite_auto" ? (
@@ -1053,6 +1101,7 @@ export default function Metas() {
                   onChange={(e) => setMInicial(e.target.value)}
                   placeholder="Valor inicial (opcional)"
                   style={styles.input}
+                  disabled={!canMutate}
                 />
               ) : (
                 <select
@@ -1060,6 +1109,7 @@ export default function Metas() {
                   onChange={(e) => setMCategoriaLimite(e.target.value)}
                   style={styles.select}
                   title="Categoria para limite automático"
+                  disabled={!canMutate}
                 >
                   {(categoriasLanc.length ? categoriasLanc : ["Outros"]).map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -1077,6 +1127,7 @@ export default function Metas() {
                     onChange={(e) => setMInicio(e.target.value)}
                     style={{ ...styles.input, minWidth: 190 }}
                     title="Data de início"
+                    disabled={!canMutate}
                   />
                 </div>
 
@@ -1088,6 +1139,7 @@ export default function Metas() {
                     onChange={(e) => setMFim(e.target.value)}
                     style={{ ...styles.input, minWidth: 190 }}
                     title="Data fim (opcional)"
+                    disabled={!canMutate}
                   />
                 </div>
               </div>
@@ -1118,29 +1170,29 @@ export default function Metas() {
                     placeholder="Personalizado (opcional)"
                     style={{ ...styles.input, minWidth: 220 }}
                     title="Ícone personalizado (opcional)"
+                    disabled={!canMutate}
                   />
                 </div>
 
                 {uiIconsNovaOpen ? (
-                  <>
-                    <div style={{ ...styles.iconRow, marginTop: 10 }}>
-                      {ICONES_SUGERIDOS.map((ic) => (
-                        <button
-                          key={ic}
-                          type="button"
-                          onClick={() => setMIcone(ic)}
-                          style={{
-                            ...styles.iconPick,
-                            borderColor: (mIcone === ic ? "var(--tabActiveBorder)" : "var(--border)"),
-                            background: (mIcone === ic ? "var(--tabActiveBg)" : "var(--controlBg)"),
-                          }}
-                          title={`Usar ${ic}`}
-                        >
-                          {ic}
-                        </button>
-                      ))}
-                    </div>
-                  </>
+                  <div style={{ ...styles.iconRow, marginTop: 10 }}>
+                    {ICONES_SUGERIDOS.map((ic) => (
+                      <button
+                        key={ic}
+                        type="button"
+                        onClick={() => setMIcone(ic)}
+                        style={{
+                          ...styles.iconPick,
+                          borderColor: (mIcone === ic ? "var(--tabActiveBorder)" : "var(--border)"),
+                          background: (mIcone === ic ? "var(--tabActiveBg)" : "var(--controlBg)"),
+                        }}
+                        title={`Usar ${ic}`}
+                        disabled={!canMutate}
+                      >
+                        {ic}
+                      </button>
+                    ))}
+                  </div>
                 ) : (
                   <div style={{ ...styles.iconRow, marginTop: 10 }}>
                     {ICONES_SUGERIDOS.slice(0, ICONES_PADRAO_QTD).map((ic) => (
@@ -1154,6 +1206,7 @@ export default function Metas() {
                           background: (mIcone === ic ? "var(--tabActiveBg)" : "var(--controlBg)"),
                         }}
                         title={`Usar ${ic}`}
+                        disabled={!canMutate}
                       >
                         {ic}
                       </button>
@@ -1171,6 +1224,7 @@ export default function Metas() {
                 style={{ ...styles.input, minWidth: 160 }}
                 placeholder="#2563EB"
                 title="Cor (hex)"
+                disabled={!canMutate}
               />
 
               {/* ✅ Desafio */}
@@ -1179,12 +1233,18 @@ export default function Metas() {
                   type="checkbox"
                   checked={mDesafioAtivo}
                   onChange={(e) => setMDesafioAtivo(e.target.checked)}
+                  disabled={!canMutate}
                 />
                 Modo desafio
               </label>
 
               {mDesafioAtivo ? (
-                <select value={mDesafioFreq} onChange={(e) => setMDesafioFreq(e.target.value)} style={styles.select}>
+                <select
+                  value={mDesafioFreq}
+                  onChange={(e) => setMDesafioFreq(e.target.value)}
+                  style={styles.select}
+                  disabled={!canMutate}
+                >
                   <option value="diario">Diário</option>
                   <option value="semanal">Semanal</option>
                 </select>
@@ -1196,6 +1256,7 @@ export default function Metas() {
                   type="checkbox"
                   checked={mLembreteAtivo}
                   onChange={(e) => setMLembreteAtivo(e.target.checked)}
+                  disabled={!canMutate}
                 />
                 Lembrete
               </label>
@@ -1207,331 +1268,360 @@ export default function Metas() {
                   onChange={(e) => setMLembreteHora(e.target.value)}
                   style={{ ...styles.input, minWidth: 140 }}
                   title="Hora do lembrete"
+                  disabled={!canMutate}
                 />
               ) : null}
 
-              <button onClick={criarMeta} style={styles.primaryBtn}>
+              <button onClick={criarMeta} style={styles.primaryBtn} disabled={!canMutate}>
                 ➕ Criar meta
               </button>
 
               <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
-                Dica: comece simples. Se for “limite por categoria”, o app calcula sozinho pelo gasto do mês.
+                Dica: se for “limite por categoria”, o app calcula sozinho pelo gasto do mês.
               </span>
             </div>
           </div>
         </CollapseSection>
-        {/* ====== METAS ATIVAS ====== */}
+
+        {/* ====== METAS ATIVAS / ARQUIVADAS + MODAIS (continua na PARTE 2) ====== */}
+/* =========================
+   METAS.JSX — PARTE 2/2
+   ========================= */
+
+/* ====== LISTAS ====== */
         <CollapseSection
-          id="metas_ativas"
-          title="Metas ativas"
-          subtitle={`${metasAtivas.length} ativa(s)`}
+          id="ativas"
+          title={`Metas ativas (${metasAtivas.length})`}
+          subtitle={metasAtivas.length ? "acompanhe o progresso" : "crie sua primeira meta"}
           open={uiShowAtivas}
           onToggle={() => setUiShowAtivas(v => !v)}
         >
-          {metasAtivas.length === 0 ? (
-            <EmptyState
-              title="Nenhuma meta ativa ainda."
-              subtitle="Crie uma meta acima e comece a acompanhar seu progresso."
-            />
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {metasAtivas.map((m) => (
-                <MetaCard
-                  key={m.id}
-                  meta={m}
-                  onAdd={() => abrirAdd(m)}
-                  onEdit={() => abrirEditar(m)}
-                  onArchive={() => arquivarMeta(m)}
-                  onDelete={() => excluirMeta(m)}
-                  onCheckin={() => fazerCheckin(m)}
-                />
-              ))}
-            </div>
-          )}
+          <div style={{ display: "grid", gap: 10 }}>
+            {metasAtivas.length === 0 ? (
+              <div style={styles.empty}>
+                <div style={{ fontWeight: 1000 }}>Nenhuma meta ativa</div>
+                <div style={{ color: "var(--muted)", fontWeight: 900 }}>
+                  Crie uma meta acima e acompanhe o progresso.
+                </div>
+              </div>
+            ) : null}
+
+            {metasAtivas.map((m) => (
+              <MetaCard
+                key={m.id}
+                meta={m}
+                canMutate={canMutate}
+                onAdd={() => abrirAdd(m)}
+                onEdit={() => abrirEditar(m)}
+                onArchive={() => arquivarMeta(m)}
+                onDelete={() => excluirMeta(m)}
+                onCheckin={() => fazerCheckin(m)}
+              />
+            ))}
+          </div>
         </CollapseSection>
 
-        {/* ====== METAS ARQUIVADAS ====== */}
         <CollapseSection
-          id="metas_arq"
-          title="Arquivadas"
-          subtitle={`${metasArquivadas.length} arquivada(s)`}
+          id="arquivadas"
+          title={`Arquivadas (${metasArquivadas.length})`}
+          subtitle="histórico e concluídas"
           open={uiShowArquivadas}
           onToggle={() => setUiShowArquivadas(v => !v)}
         >
-          {metasArquivadas.length === 0 ? (
-            <EmptyState
-              title="Nada arquivado."
-              subtitle="Quando você concluir ou pausar uma meta, ela aparece aqui."
-            />
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {metasArquivadas.map((m) => (
-                <MetaCard
-                  key={m.id}
-                  meta={m}
-                  onAdd={null}
-                  onEdit={() => abrirEditar(m)}
-                  onArchive={null}
-                  onReactivate={() => reativarMeta(m)}
-                  onDelete={() => excluirMeta(m)}
-                  onCheckin={() => fazerCheckin(m)}
-                  archived
-                />
-              ))}
-            </div>
-          )}
+          <div style={{ display: "grid", gap: 10 }}>
+            {metasArquivadas.length === 0 ? (
+              <div style={styles.empty}>
+                <div style={{ fontWeight: 1000 }}>Nada por aqui</div>
+                <div style={{ color: "var(--muted)", fontWeight: 900 }}>
+                  Arquive metas para consultar depois.
+                </div>
+              </div>
+            ) : null}
+
+            {metasArquivadas.map((m) => (
+              <MetaCard
+                key={m.id}
+                meta={m}
+                canMutate={canMutate}
+                archived
+                onReactivate={() => reativarMeta(m)}
+                onDelete={() => excluirMeta(m)}
+              />
+            ))}
+          </div>
         </CollapseSection>
 
-        <div style={{ height: 6 }} />
-
-        {/* ====== MODAIS ====== */}
+        {/* ====== MODAL: ADD PROGRESSO ====== */}
         {addOpen ? (
-          <Modal title={`Adicionar progresso — ${addMeta?.titulo || ""}`} onClose={() => setAddOpen(false)}>
+          <Modal onClose={() => setAddOpen(false)} title="Adicionar progresso">
             <div style={{ display: "grid", gap: 10 }}>
-              {addMeta?.modoLimiteAuto ? (
-                <div style={styles.empty}>
-                  <div style={{ fontWeight: 1000 }}>Essa meta é “limite por categoria (automático)”.</div>
-                  <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900 }}>
-                    O progresso é calculado sozinho pelo gasto do mês na categoria.
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <label style={styles.label}>
-                    Valor (R$)
-                    <input value={addValor} onChange={(e) => setAddValor(e.target.value)} style={styles.input} />
-                  </label>
+              <div style={{ color: "var(--muted)", fontWeight: 900 }}>
+                Meta: <b style={{ color: "var(--text)" }}>{addMeta?.icone || "🎯"} {addMeta?.titulo}</b>
+              </div>
 
-                  <label style={styles.label}>
-                    Data
-                    <input type="date" value={addData} onChange={(e) => setAddData(e.target.value)} style={styles.input} />
-                  </label>
+              <div style={styles.formRow2}>
+                <input
+                  value={addValor}
+                  onChange={(e) => setAddValor(e.target.value)}
+                  placeholder="Valor (ex: 300 ou 300,00)"
+                  style={styles.input}
+                  disabled={!canMutate}
+                />
 
-                  <label style={styles.label}>
-                    Observação (opcional)
-                    <input value={addNota} onChange={(e) => setAddNota(e.target.value)} style={styles.input} />
-                  </label>
+                <input
+                  type="date"
+                  value={addData}
+                  onChange={(e) => setAddData(e.target.value)}
+                  style={{ ...styles.input, minWidth: 190 }}
+                  disabled={!canMutate}
+                />
+              </div>
 
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button onClick={() => setAddOpen(false)} style={styles.secondaryBtn}>Cancelar</button>
-                    <button onClick={salvarAdd} style={styles.primaryBtn}>Salvar</button>
-                  </div>
-                </>
-              )}
+              <input
+                value={addNota}
+                onChange={(e) => setAddNota(e.target.value)}
+                placeholder="Nota (opcional)"
+                style={styles.input}
+                disabled={!canMutate}
+              />
 
-              {addMeta ? (
-                <div style={{ ...styles.card2, padding: 12 }}>
-                  <div style={{ fontWeight: 950 }}>✨ {addMeta.motivational}</div>
-                  <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900 }}>
-                    Atual: <b>{money(addMeta.atual)}</b> • Alvo: <b>{money(addMeta.valor_alvo)}</b>
-                  </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <button onClick={() => setAddOpen(false)} style={styles.secondaryBtn}>
+                  Cancelar
+                </button>
+                <button onClick={salvarAdd} style={styles.primaryBtn} disabled={!canMutate}>
+                  ✅ Salvar
+                </button>
+              </div>
+
+              {!canMutate ? (
+                <div style={styles.lockNote}>
+                  🔒 Assinatura necessária para registrar progresso.
                 </div>
               ) : null}
             </div>
           </Modal>
         ) : null}
 
+        {/* ====== MODAL: EDITAR META ====== */}
         {editOpen ? (
-          <Modal title={`Editar meta`} onClose={() => setEditOpen(false)}>
+          <Modal onClose={() => setEditOpen(false)} title="Editar meta">
             <div style={{ display: "grid", gap: 10 }}>
-              <label style={styles.label}>
-                Nome
-                <input value={eTitulo} onChange={(e) => setETitulo(e.target.value)} style={styles.input} />
-              </label>
+              <div style={styles.formRow}>
+                <input
+                  value={eTitulo}
+                  onChange={(e) => setETitulo(e.target.value)}
+                  placeholder="Nome da meta"
+                  style={{ ...styles.input, minWidth: 240 }}
+                  disabled={!canMutate}
+                />
 
-              <label style={styles.label}>
-                Tipo
-                <select value={eTipo} onChange={(e) => setETipo(e.target.value)} style={styles.select}>
+                <select
+                  value={eTipo}
+                  onChange={(e) => setETipo(e.target.value)}
+                  style={styles.select}
+                  disabled={!canMutate}
+                >
                   <option value="guardar">Guardar dinheiro</option>
                   <option value="pagar">Pagar dívida</option>
-                  <option value="limitar">Limitar gasto</option>
+                  <option value="limitar">Limitar gasto (manual)</option>
                 </select>
-              </label>
 
-              <label style={styles.label}>
-                Valor alvo (R$)
-                <input value={eAlvo} onChange={(e) => setEAlvo(e.target.value)} style={styles.input} />
-              </label>
+                <input
+                  value={eAlvo}
+                  onChange={(e) => setEAlvo(e.target.value)}
+                  placeholder="Valor alvo"
+                  style={styles.input}
+                  disabled={!canMutate}
+                />
 
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <label style={{ ...styles.label, minWidth: 220 }}>
-                  Data início
-                  <input type="date" value={eInicio} onChange={(e) => setEInicio(e.target.value)} style={styles.input} />
-                </label>
+                <div style={styles.dateGroup}>
+                  <div style={styles.dateCol}>
+                    <div style={styles.miniLabel}>Início</div>
+                    <input
+                      type="date"
+                      value={eInicio}
+                      onChange={(e) => setEInicio(e.target.value)}
+                      style={{ ...styles.input, minWidth: 190 }}
+                      disabled={!canMutate}
+                    />
+                  </div>
 
-                <label style={{ ...styles.label, minWidth: 220 }}>
-                  Data fim (opcional)
-                  <input type="date" value={eFim} onChange={(e) => setEFim(e.target.value)} style={styles.input} />
-                </label>
-              </div>
-
-              {/* ✅ Ícones recolhíveis no editar */}
-              <div style={{ ...styles.card2, padding: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                  <div style={{ fontWeight: 1000 }}>Ícone</div>
-
-                  <button
-                    type="button"
-                    onClick={() => setUiIconsEditOpen(v => !v)}
-                    style={styles.smallBtn}
-                    title="Mostrar/ocultar ícones"
-                  >
-                    {uiIconsEditOpen ? "Ocultar" : "Escolher ícone"} {uiIconsEditOpen ? "▾" : "▸"}
-                  </button>
+                  <div style={styles.dateCol}>
+                    <div style={styles.miniLabel}>Fim (opcional)</div>
+                    <input
+                      type="date"
+                      value={eFim || ""}
+                      onChange={(e) => setEFim(e.target.value)}
+                      style={{ ...styles.input, minWidth: 190 }}
+                      disabled={!canMutate}
+                    />
+                  </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-                  <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
-                    Selecionado: <b style={{ color: "var(--text)" }}>{(eIconeCustom || eIcone || "🎯").slice(0, 4)}</b>
-                  </span>
-
-                  <input
-                    value={eIconeCustom}
-                    onChange={(e) => setEIconeCustom(e.target.value)}
-                    placeholder="Personalizado (opcional)"
-                    style={{ ...styles.input, minWidth: 220 }}
-                  />
-                </div>
-
-                {uiIconsEditOpen ? (
-                  <div style={{ ...styles.iconRow, marginTop: 10 }}>
-                    {ICONES_SUGERIDOS.map((ic) => (
-                      <button
-                        key={ic}
-                        type="button"
-                        onClick={() => setEIcone(ic)}
-                        style={{
-                          ...styles.iconPick,
-                          borderColor: (eIcone === ic ? "var(--tabActiveBorder)" : "var(--border)"),
-                          background: (eIcone === ic ? "var(--tabActiveBg)" : "var(--controlBg)"),
-                        }}
-                        title={`Usar ${ic}`}
-                      >
-                        {ic}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ ...styles.iconRow, marginTop: 10 }}>
-                    {ICONES_SUGERIDOS.slice(0, ICONES_PADRAO_QTD).map((ic) => (
-                      <button
-                        key={ic}
-                        type="button"
-                        onClick={() => setEIcone(ic)}
-                        style={{
-                          ...styles.iconPick,
-                          borderColor: (eIcone === ic ? "var(--tabActiveBorder)" : "var(--border)"),
-                          background: (eIcone === ic ? "var(--tabActiveBg)" : "var(--controlBg)"),
-                        }}
-                        title={`Usar ${ic}`}
-                      >
-                        {ic}
-                      </button>
-                    ))}
-                    <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
-                      +{Math.max(0, ICONES_SUGERIDOS.length - ICONES_PADRAO_QTD)}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <label style={{ ...styles.label, minWidth: 180 }}>
-                  Cor
-                  <input value={eCor} onChange={(e) => setECor(e.target.value)} style={styles.input} placeholder="#2563EB" />
-                </label>
-              </div>
-
-              {/* ✅ Limite por categoria (auto) */}
-              <div style={{ ...styles.card2, padding: 12 }}>
-                <div style={{ fontWeight: 1000 }}>Limite por categoria (automático)</div>
-
-                <label style={{ ...styles.checkLabel, marginTop: 8 }}>
+                {/* Limite automático (mensal) */}
+                <label style={styles.checkLabel} title="Limite automático por categoria (mensal)">
                   <input
                     type="checkbox"
                     checked={eModoLimiteAuto}
                     onChange={(e) => setEModoLimiteAuto(e.target.checked)}
+                    disabled={!canMutate}
                   />
-                  Ativar
+                  Limite por categoria (auto)
                 </label>
 
                 {eModoLimiteAuto ? (
-                  <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ color: "var(--muted)", fontWeight: 900 }}>
-                      Categoria:
-                    </span>
-                    <select value={eCategoriaLimite} onChange={(e) => setECategoriaLimite(e.target.value)} style={styles.select}>
-                      {(categoriasLanc.length ? categoriasLanc : ["Outros"]).map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                    <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
-                      O gasto do mês nessa categoria vira o “atual”.
-                    </span>
-                  </div>
+                  <select
+                    value={eCategoriaLimite}
+                    onChange={(e) => setECategoriaLimite(e.target.value)}
+                    style={styles.select}
+                    disabled={!canMutate}
+                  >
+                    {(categoriasLanc.length ? categoriasLanc : ["Outros"]).map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 ) : null}
-              </div>
 
-              {/* ✅ Desafio */}
-              <div style={{ ...styles.card2, padding: 12 }}>
-                <div style={{ fontWeight: 1000 }}>Modo desafio</div>
+                {/* Ícone recolhível */}
+                <div style={styles.iconBlock}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                    <div style={styles.miniLabel}>Ícone</div>
 
-                <label style={{ ...styles.checkLabel, marginTop: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setUiIconsEditOpen(v => !v)}
+                      style={styles.smallBtn}
+                      disabled={!canMutate}
+                    >
+                      {uiIconsEditOpen ? "Ocultar" : "Escolher ícone"} {uiIconsEditOpen ? "▾" : "▸"}
+                    </button>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                    <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
+                      Selecionado: <b style={{ color: "var(--text)" }}>{(eIconeCustom || eIcone || "🎯").slice(0, 4)}</b>
+                    </span>
+
+                    <input
+                      value={eIconeCustom}
+                      onChange={(e) => setEIconeCustom(e.target.value)}
+                      placeholder="Personalizado (opcional)"
+                      style={{ ...styles.input, minWidth: 220 }}
+                      disabled={!canMutate}
+                    />
+                  </div>
+
+                  {uiIconsEditOpen ? (
+                    <div style={{ ...styles.iconRow, marginTop: 10 }}>
+                      {ICONES_SUGERIDOS.map((ic) => (
+                        <button
+                          key={ic}
+                          type="button"
+                          onClick={() => setEIcone(ic)}
+                          style={{
+                            ...styles.iconPick,
+                            borderColor: (eIcone === ic ? "var(--tabActiveBorder)" : "var(--border)"),
+                            background: (eIcone === ic ? "var(--tabActiveBg)" : "var(--controlBg)"),
+                          }}
+                          disabled={!canMutate}
+                        >
+                          {ic}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ ...styles.iconRow, marginTop: 10 }}>
+                      {ICONES_SUGERIDOS.slice(0, ICONES_PADRAO_QTD).map((ic) => (
+                        <button
+                          key={ic}
+                          type="button"
+                          onClick={() => setEIcone(ic)}
+                          style={{
+                            ...styles.iconPick,
+                            borderColor: (eIcone === ic ? "var(--tabActiveBorder)" : "var(--border)"),
+                            background: (eIcone === ic ? "var(--tabActiveBg)" : "var(--controlBg)"),
+                          }}
+                          disabled={!canMutate}
+                        >
+                          {ic}
+                        </button>
+                      ))}
+                      <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
+                        +{Math.max(0, ICONES_SUGERIDOS.length - ICONES_PADRAO_QTD)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <input
+                  value={eCor}
+                  onChange={(e) => setECor(e.target.value)}
+                  style={{ ...styles.input, minWidth: 160 }}
+                  placeholder="#2563EB"
+                  title="Cor (hex)"
+                  disabled={!canMutate}
+                />
+
+                {/* Desafio */}
+                <label style={styles.checkLabel}>
                   <input
                     type="checkbox"
                     checked={eDesafioAtivo}
                     onChange={(e) => setEDesafioAtivo(e.target.checked)}
+                    disabled={!canMutate}
                   />
-                  Ativar desafio
+                  Modo desafio
                 </label>
 
                 {eDesafioAtivo ? (
-                  <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ color: "var(--muted)", fontWeight: 900 }}>Frequência:</span>
-                    <select value={eDesafioFreq} onChange={(e) => setEDesafioFreq(e.target.value)} style={styles.select}>
-                      <option value="diario">Diário</option>
-                      <option value="semanal">Semanal</option>
-                    </select>
-                    <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
-                      Use check-in para manter a sequência.
-                    </span>
-                  </div>
+                  <select
+                    value={eDesafioFreq}
+                    onChange={(e) => setEDesafioFreq(e.target.value)}
+                    style={styles.select}
+                    disabled={!canMutate}
+                  >
+                    <option value="diario">Diário</option>
+                    <option value="semanal">Semanal</option>
+                  </select>
                 ) : null}
-              </div>
 
-              {/* ✅ Lembretes */}
-              <div style={{ ...styles.card2, padding: 12 }}>
-                <div style={{ fontWeight: 1000 }}>Notificações / Lembretes</div>
-
-                <label style={{ ...styles.checkLabel, marginTop: 8 }}>
+                {/* Lembrete */}
+                <label style={styles.checkLabel}>
                   <input
                     type="checkbox"
                     checked={eLembreteAtivo}
                     onChange={(e) => setELembreteAtivo(e.target.checked)}
+                    disabled={!canMutate}
                   />
-                  Ativar lembrete
+                  Lembrete
                 </label>
 
                 {eLembreteAtivo ? (
-                  <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ color: "var(--muted)", fontWeight: 900 }}>Hora:</span>
-                    <input
-                      type="time"
-                      value={eLembreteHora}
-                      onChange={(e) => setELembreteHora(e.target.value)}
-                      style={{ ...styles.input, minWidth: 140 }}
-                    />
-                    <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
-                      Requer permissão (botão “Ativar notificações” no topo).
-                    </span>
-                  </div>
+                  <input
+                    type="time"
+                    value={eLembreteHora}
+                    onChange={(e) => setELembreteHora(e.target.value)}
+                    style={{ ...styles.input, minWidth: 140 }}
+                    disabled={!canMutate}
+                  />
                 ) : null}
               </div>
 
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                <button onClick={() => setEditOpen(false)} style={styles.secondaryBtn}>Cancelar</button>
-                <button onClick={salvarEditar} style={styles.primaryBtn}>Salvar</button>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <button onClick={() => setEditOpen(false)} style={styles.secondaryBtn}>
+                  Cancelar
+                </button>
+                <button onClick={salvarEditar} style={styles.primaryBtn} disabled={!canMutate}>
+                  ✅ Salvar alterações
+                </button>
               </div>
+
+              {!canMutate ? (
+                <div style={styles.lockNote}>
+                  🔒 Assinatura necessária para editar metas.
+                </div>
+              ) : null}
             </div>
           </Modal>
         ) : null}
@@ -1540,539 +1630,449 @@ export default function Metas() {
   );
 }
 
-/* ================= COMPONENTS ================= */
-
-function MetaCard({ meta, onAdd, onEdit, onArchive, onReactivate, onDelete, onCheckin, archived = false }) {
-  const barColor = meta.cor || "var(--accent)";
-  const modoLimiteAuto = !!meta.modoLimiteAuto;
-
-  const done = modoLimiteAuto
-    ? (Number(meta.atual || 0) <= Number(meta.valor_alvo || 0))
-    : !!meta.done;
-
-  const prazoTxt =
-    meta.data_fim
-      ? (meta.diasRest === null
-        ? `Prazo: ${formatShortDate(meta.data_fim)}`
-        : meta.diasRest < 0
-          ? `Prazo: ${formatShortDate(meta.data_fim)} • atrasado`
-          : `Prazo: ${formatShortDate(meta.data_fim)} • faltam ${meta.diasRest} dia(s)`)
-      : "Sem prazo";
-
-  const status =
-    modoLimiteAuto
-      ? (Number(meta.atual || 0) > Number(meta.valor_alvo || 0)
-        ? { label: "Estourou", tone: "bad" }
-        : clampPct(meta.pct) >= 75
-          ? { label: "Atenção", tone: "hot" }
-          : { label: "No controle", tone: "ok" })
-      : done
-        ? { label: "Concluída", tone: "ok" }
-        : meta.isLate
-          ? { label: "Atrasando", tone: "bad" }
-          : meta.pct >= 75
-            ? { label: "Quase lá", tone: "hot" }
-            : { label: "No ritmo", tone: "neutral" };
-
-  const statusStyle =
-    status.tone === "ok"
-      ? { background: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.28)", color: "var(--accent2)" }
-      : status.tone === "bad"
-        ? { background: "rgba(239,68,68,0.10)", borderColor: "rgba(239,68,68,0.28)", color: "#EF4444" }
-        : status.tone === "hot"
-          ? { background: "rgba(249,115,22,0.10)", borderColor: "rgba(249,115,22,0.28)", color: "var(--warn)" }
-          : { background: "rgba(148,163,184,0.10)", borderColor: "rgba(148,163,184,0.22)", color: "var(--muted)" };
-
-  const linhaPrincipal = modoLimiteAuto
-    ? (
-      <div style={{ fontWeight: 950 }}>
-        {money(meta.atual)} <span style={{ color: "var(--muted)", fontWeight: 900 }}>/ {money(meta.valor_alvo)}</span>
-        <span style={{ marginLeft: 10, color: "var(--muted)", fontWeight: 900 }}>
-          • {meta.limite_categoria || "Categoria"}
-        </span>
-      </div>
-    )
-    : (
-      <div style={{ fontWeight: 950 }}>
-        {money(meta.atual)} <span style={{ color: "var(--muted)", fontWeight: 900 }}>/ {money(meta.valor_alvo)}</span>
-      </div>
-    );
-
-  const faltaLinha = modoLimiteAuto
-    ? (
-      Number(meta.atual || 0) > Number(meta.valor_alvo || 0) ? (
-        <div style={{ color: "#EF4444", fontWeight: 950 }}>
-          ⚠️ Excedeu em <b>{money(Number(meta.atual || 0) - Number(meta.valor_alvo || 0))}</b>
-        </div>
-      ) : (
-        <div style={{ color: "var(--accent2)", fontWeight: 950 }}>
-          ✅ Dentro do limite • sobra <b>{money(meta.falta)}</b>
-        </div>
-      )
-    )
-    : (!done ? (
-      <div style={{ color: "var(--muted)", fontWeight: 900 }}>
-        Falta <b>{money(meta.falta)}</b>
-      </div>
-    ) : (
-      <div style={{ color: "var(--accent2)", fontWeight: 950 }}>
-        ✅ Alvo atingido
-      </div>
-    ));
-
-  const pctDisplay = modoLimiteAuto ? clampPct(meta.pct) : meta.pct;
-
-  return (
-    <div style={styles.cardPad}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div style={{ minWidth: 260 }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
-            <div style={{ fontWeight: 1000, fontSize: 16 }}>
-              <span style={{ marginRight: 8 }}>{meta.icone || "🎯"}</span>
-              {meta.titulo}
-            </div>
-
-            <span style={{ ...styles.badge, ...statusStyle }}>
-              {status.label}
-            </span>
-
-            <span style={{ color: "var(--muted)", fontWeight: 900 }}>
-              {modoLimiteAuto ? "Limite (auto)" : (meta.tipo === "guardar" ? "Guardar" : meta.tipo === "pagar" ? "Dívida" : "Limite")} •{" "}
-              Início: {formatShortDate(meta.data_inicio || meta.inicio)} • {prazoTxt}
-            </span>
-          </div>
-
-          <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            {linhaPrincipal}
-            {faltaLinha}
-          </div>
-
-          <div style={styles.progressWrap} aria-label="Progresso da meta">
-            <div
-              style={{
-                ...styles.progressBar,
-                width: `${clampPct(pctDisplay)}%`,
-                background: barColor,
-              }}
-            />
-          </div>
-
-          <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ color: "var(--muted)", fontWeight: 900 }}>
-              Progresso: <b style={{ color: "var(--text)" }}>{clampPct(pctDisplay).toFixed(0)}%</b>
-            </div>
-
-            {meta.desafio_ativo ? (
-              <div style={{ color: "var(--muted)", fontWeight: 900 }}>
-                🔥 Streak: <b style={{ color: "var(--text)" }}>{meta.streak || 0}</b> {meta.desafio_freq === "diario" ? "dia(s)" : "semana(s)"}
-              </div>
-            ) : null}
-
-            {meta.porMes !== null && meta.porSemana !== null && !done ? (
-              modoLimiteAuto ? (
-                <div style={{ color: "var(--muted)", fontWeight: 900 }}>
-                  Para voltar ao limite no prazo: reduzir <b>{money(meta.porMes)}</b>/mês ou <b>{money(meta.porSemana)}</b>/semana
-                </div>
-              ) : (
-                <div style={{ color: "var(--muted)", fontWeight: 900 }}>
-                  Para chegar no prazo: <b>{money(meta.porMes)}</b>/mês ou <b>{money(meta.porSemana)}</b>/semana
-                </div>
-              )
-            ) : null}
-          </div>
-
-          <div style={{ marginTop: 10, ...styles.motivBox }}>
-            <div style={{ fontWeight: 950 }}>✨ {meta.motivational}</div>
-
-            {modoLimiteAuto ? (
-              <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900 }}>
-                Calculado automaticamente pelos gastos do mês em <b>{meta.limite_categoria || "Categoria"}</b>.
-              </div>
-            ) : meta.lastMov ? (
-              <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900 }}>
-                Último progresso: <b>{money(meta.lastMov.valor)}</b> em <b>{formatShortDate(meta.lastMov.data)}</b>
-                {meta.lastMov.nota ? <span> • {meta.lastMov.nota}</span> : null}
-              </div>
-            ) : (
-              <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900 }}>
-                Nenhum progresso registrado ainda — comece com um valor pequeno hoje.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          {!archived && meta.desafio_ativo && onCheckin ? (
-            <button onClick={onCheckin} style={styles.secondaryBtn} title="Registrar check-in do desafio">
-              ✅ Check-in
-            </button>
-          ) : null}
-
-          {!archived && onAdd ? (
-            <button onClick={onAdd} style={styles.primaryBtn} disabled={modoLimiteAuto} title={modoLimiteAuto ? "Meta automática: não precisa progresso manual" : "Adicionar progresso"}>
-              ➕ Progresso
-            </button>
-          ) : null}
-
-          {onEdit ? (
-            <button onClick={onEdit} style={styles.secondaryBtn}>✏️ Editar</button>
-          ) : null}
-
-          {!archived && onArchive ? (
-            <button onClick={onArchive} style={styles.secondaryBtn}>📦 Arquivar</button>
-          ) : null}
-
-          {archived && onReactivate ? (
-            <button onClick={onReactivate} style={styles.primaryBtn}>↩️ Reativar</button>
-          ) : null}
-
-          {onDelete ? (
-            <button onClick={onDelete} style={styles.dangerBtn} title="Excluir meta">
-              🗑️ Excluir
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ title, subtitle }) {
-  return (
-    <div style={styles.empty}>
-      <div style={{ fontWeight: 1000 }}>{title}</div>
-      <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900 }}>
-        {subtitle}
-      </div>
-    </div>
-  );
-}
+/* =========================
+   COMPONENTES AUXILIARES
+   ========================= */
 
 function CollapseSection({ id, title, subtitle, open, onToggle, children }) {
   return (
-    <section style={{ marginTop: 12 }} aria-labelledby={`${id}_title`}>
-      <button
-        onClick={onToggle}
-        style={styles.collapseBtn}
-        aria-expanded={open}
-        aria-controls={`${id}_content`}
-      >
-        <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-          <div id={`${id}_title`} style={{ fontWeight: 1000, letterSpacing: -0.2 }}>{title}</div>
+    <div style={styles.section} id={id}>
+      <button onClick={onToggle} style={styles.sectionHead}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 1000 }}>{title}</span>
           <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>{subtitle}</span>
         </div>
-        <div style={{ color: "var(--muted)", fontWeight: 1000 }}>
+        <span style={{ color: "var(--muted)", fontWeight: 900 }}>
           {open ? "▾" : "▸"}
-        </div>
+        </span>
       </button>
+      {open ? <div style={{ marginTop: 10 }}>{children}</div> : null}
+    </div>
+  );
+}
 
-      {open ? (
-        <div id={`${id}_content`} style={{ marginTop: 10 }}>
-          {children}
+function MetaCard({
+  meta,
+  canMutate,
+  archived = false,
+  onAdd,
+  onEdit,
+  onArchive,
+  onReactivate,
+  onDelete,
+  onCheckin,
+}) {
+  const pct = meta.modoLimiteAuto ? clampPct(meta.pct) : clampPct(meta.pct);
+  const done = meta.modoLimiteAuto
+    ? (meta.valor_alvo > 0 ? (meta.atual <= meta.valor_alvo) : true)
+    : meta.done;
+
+  const badge =
+    done
+      ? { txt: "Concluída", bg: "rgba(34,197,94,.15)", bd: "rgba(34,197,94,.30)", fg: "var(--text)" }
+      : meta.isLate
+        ? { txt: "Atrasada", bg: "rgba(239,68,68,.12)", bd: "rgba(239,68,68,.28)", fg: "var(--text)" }
+        : meta.modoLimiteAuto
+          ? { txt: `Limite: ${meta.limite_categoria || "Categoria"}`, bg: "rgba(59,130,246,.12)", bd: "rgba(59,130,246,.28)", fg: "var(--text)" }
+          : { txt: `${pct.toFixed(0)}%`, bg: "rgba(59,130,246,.10)", bd: "rgba(59,130,246,.25)", fg: "var(--text)" };
+
+  return (
+    <div style={styles.metaCard}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <div style={{
+            ...styles.metaIcon,
+            borderColor: meta.cor || "var(--border)",
+            background: "var(--controlBg)"
+          }}>
+            <span style={{ fontSize: 18 }}>{meta.icone || "🎯"}</span>
+          </div>
+
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 1000, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 520 }}>
+                {meta.titulo}
+              </div>
+
+              <span style={{
+                ...styles.badge,
+                background: badge.bg,
+                borderColor: badge.bd,
+                color: badge.fg
+              }}>
+                {badge.txt}
+              </span>
+
+              {meta.desafio_ativo ? (
+                <span style={{
+                  ...styles.badge,
+                  background: "rgba(245,158,11,.12)",
+                  borderColor: "rgba(245,158,11,.25)",
+                  color: "var(--text)"
+                }}>
+                  🔥 streak: {meta.streak || 0}
+                </span>
+              ) : null}
+            </div>
+
+            <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900, fontSize: 13 }}>
+              {meta.modoLimiteAuto ? (
+                <>
+                  Gasto do mês: <b style={{ color: "var(--text)" }}>{money(meta.atual)}</b>{" "}
+                  de <b style={{ color: "var(--text)" }}>{money(meta.valor_alvo)}</b>{" "}
+                  • {pct.toFixed(0)}%
+                </>
+              ) : (
+                <>
+                  <b style={{ color: "var(--text)" }}>{money(meta.atual)}</b>{" "}
+                  de <b style={{ color: "var(--text)" }}>{money(meta.valor_alvo)}</b>{" "}
+                  • {pct.toFixed(0)}% • falta{" "}
+                  <b style={{ color: "var(--text)" }}>{money(meta.falta)}</b>
+                </>
+              )}
+            </div>
+
+            {/* Barra */}
+            <div style={{ ...styles.progressWrap, marginTop: 10 }}>
+              <div style={{
+                ...styles.progressBar,
+                width: `${Math.min(100, Math.max(0, pct))}%`,
+                background: meta.cor || "var(--accent)"
+              }} />
+            </div>
+
+            {/* Prazos / ritmo */}
+            <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={styles.micro}>
+                Início: <b style={{ color: "var(--text)" }}>{formatShortDate(meta.data_inicio)}</b>
+              </span>
+
+              {meta.data_fim ? (
+                <span style={styles.micro}>
+                  Fim: <b style={{ color: "var(--text)" }}>{formatShortDate(meta.data_fim)}</b>
+                </span>
+              ) : (
+                <span style={styles.micro}>Fim: <b style={{ color: "var(--text)" }}>—</b></span>
+              )}
+
+              {meta.data_fim && meta.diasRest !== null ? (
+                <span style={styles.micro}>
+                  Restam:{" "}
+                  <b style={{ color: "var(--text)" }}>
+                    {meta.diasRest >= 0 ? `${meta.diasRest} dias` : `${Math.abs(meta.diasRest)} dias (passou)`}
+                  </b>
+                </span>
+              ) : null}
+
+              {!meta.modoLimiteAuto && meta.data_fim && meta.porMes ? (
+                <span style={styles.micro}>
+                  Ritmo: <b style={{ color: "var(--text)" }}>{money(meta.porMes)}</b>/mês
+                </span>
+              ) : null}
+
+              {meta.modoLimiteAuto ? (
+                meta.valor_alvo > 0 ? (
+                  <span style={styles.micro}>
+                    Margem:{" "}
+                    <b style={{ color: "var(--text)" }}>
+                      {meta.atual <= meta.valor_alvo ? money(meta.valor_alvo - meta.atual) : `excedeu ${money(meta.atual - meta.valor_alvo)}`}
+                    </b>
+                  </span>
+                ) : null
+              ) : null}
+            </div>
+
+            {/* Frase motivacional */}
+            <div style={{ marginTop: 10, color: "var(--text)", fontWeight: 900, opacity: 0.9 }}>
+              {meta.motivational}
+            </div>
+          </div>
         </div>
-      ) : null}
-    </section>
+
+        {/* Ações */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {!archived ? (
+            <>
+              <button
+                style={styles.secondaryBtn}
+                onClick={onAdd}
+                disabled={!canMutate || meta.modoLimiteAuto}
+                title={meta.modoLimiteAuto ? "Meta automática: progresso é calculado sozinho" : "Adicionar progresso"}
+              >
+                ➕ Progresso
+              </button>
+
+              {meta.desafio_ativo ? (
+                <button
+                  style={styles.secondaryBtn}
+                  onClick={onCheckin}
+                  disabled={!canMutate}
+                  title="Registrar check-in do desafio"
+                >
+                  🔥 Check-in
+                </button>
+              ) : null}
+
+              <button style={styles.secondaryBtn} onClick={onEdit} disabled={!canMutate}>
+                ✏️ Editar
+              </button>
+
+              <button style={styles.secondaryBtn} onClick={onArchive} disabled={!canMutate}>
+                🗂️ Arquivar
+              </button>
+
+              <button style={styles.dangerBtn} onClick={onDelete} disabled={!canMutate}>
+                🗑️ Excluir
+              </button>
+            </>
+          ) : (
+            <>
+              <button style={styles.secondaryBtn} onClick={onReactivate} disabled={!canMutate}>
+                ♻️ Reativar
+              </button>
+              <button style={styles.dangerBtn} onClick={onDelete} disabled={!canMutate}>
+                🗑️ Excluir
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
 function Modal({ title, onClose, children }) {
-  // ✅ ESC fecha
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") onClose?.();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  // ✅ clique fora fecha
-  function onOverlayMouseDown(e) {
-    if (e.target === e.currentTarget) onClose?.();
-  }
-
   return (
-    <div style={styles.modalOverlay} role="dialog" aria-modal="true" onMouseDown={onOverlayMouseDown}>
-      <div style={styles.modalBox}>
-        <div style={styles.modalHeader}>
+    <div style={styles.modalOverlay} onMouseDown={onClose}>
+      <div style={styles.modal} onMouseDown={(e) => e.stopPropagation()}>
+        <div style={styles.modalHead}>
           <div style={{ fontWeight: 1000 }}>{title}</div>
-          <button onClick={onClose} style={styles.iconBtn} aria-label="Fechar modal">✕</button>
+          <button onClick={onClose} style={styles.smallBtn}>✖</button>
         </div>
         <div style={{ marginTop: 10 }}>{children}</div>
-
-        {/* ✅ botão extra no fim (sempre aparece ao rolar) */}
-        <div style={styles.modalFooter}>
-          <button onClick={onClose} style={styles.secondaryBtn}>Fechar</button>
-        </div>
       </div>
     </div>
   );
 }
 
+/* =========================
+   STYLES (inline)
+   ========================= */
 const styles = {
-  page: { width: "100%", overflow: "visible" },
-
-  frame: {
-    width: "100%",
-    boxSizing: "border-box",
-    margin: "0 10px",
-    padding: 16,
-    overflow: "visible",
+  page: {
+    padding: 12,
+    color: "var(--text)",
   },
-
+  frame: {
+    maxWidth: 1180,
+    margin: "0 auto",
+  },
   header: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
-    alignItems: "flex-start",
     flexWrap: "wrap",
+    alignItems: "flex-start",
     marginBottom: 10,
   },
-
-  cards: {
-    marginTop: 14,
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 12,
-  },
-
-  card: {
-    border: "1px solid var(--border)",
-    borderRadius: 18,
-    padding: 14,
-    background: "var(--card)",
-    boxShadow: "var(--shadowSoft)",
-    backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)",
-  },
-
-  card2: {
-    border: "1px solid var(--border)",
-    borderRadius: 18,
-    padding: 14,
-    background: "var(--card2)",
-    boxShadow: "var(--shadowSoft)",
-    backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)",
-  },
-
-  cardPad: {
-    border: "1px solid var(--border)",
-    borderRadius: 18,
-    padding: 14,
-    background: "var(--card)",
-    boxShadow: "var(--shadowSoft)",
-    backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)",
-    overflow: "hidden",
-  },
-
-  cardLabel: { color: "var(--muted)", fontWeight: 900, fontSize: 13 },
-
-  cardValue: {
-    fontSize: 22,
-    fontWeight: 1000,
-    letterSpacing: -0.2,
-    marginTop: 6,
-  },
-
-  cardHint: { marginTop: 10, fontSize: 13, color: "var(--muted)", fontWeight: 900 },
-
-  formRow: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
-
-  label: { display: "grid", gap: 6, fontWeight: 900, color: "var(--text)" },
-
-  checkLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
+  readOnlyBar: {
+    marginTop: 10,
+    padding: "10px 12px",
+    borderRadius: 14,
+    border: "1px solid rgba(245,158,11,.30)",
+    background: "rgba(245,158,11,.10)",
     color: "var(--text)",
-    fontWeight: 900,
+    fontWeight: 1000,
     fontSize: 13,
   },
-
+  cards: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 10,
+    marginBottom: 10,
+  },
+  card: {
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    borderRadius: 16,
+    padding: 12,
+    boxShadow: "0 10px 24px rgba(0,0,0,.06)",
+  },
+  cardPad: {
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    borderRadius: 16,
+    boxShadow: "0 10px 24px rgba(0,0,0,.06)",
+  },
+  cardLabel: {
+    color: "var(--muted)",
+    fontWeight: 1000,
+    fontSize: 12,
+  },
+  cardValue: {
+    marginTop: 6,
+    fontWeight: 1100,
+    fontSize: 26,
+    letterSpacing: -0.4,
+  },
+  cardHint: {
+    marginTop: 6,
+    color: "var(--muted)",
+    fontWeight: 900,
+    fontSize: 12,
+  },
+  section: {
+    marginTop: 12,
+  },
+  sectionHead: {
+    width: "100%",
+    textAlign: "left",
+    border: "1px solid var(--border)",
+    background: "var(--card2)",
+    color: "var(--text)",
+    padding: "10px 12px",
+    borderRadius: 14,
+    cursor: "pointer",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    boxShadow: "0 10px 24px rgba(0,0,0,.06)",
+  },
+  empty: {
+    border: "1px dashed var(--border)",
+    background: "var(--card)",
+    borderRadius: 16,
+    padding: 14,
+  },
+  formRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    alignItems: "center",
+  },
+  formRow2: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
   input: {
     border: "1px solid var(--border)",
     background: "var(--controlBg)",
     color: "var(--text)",
     borderRadius: 12,
-    padding: "10px 10px",
+    padding: "10px 12px",
     outline: "none",
-    minWidth: 180,
+    fontWeight: 900,
   },
-
   select: {
     border: "1px solid var(--border)",
     background: "var(--controlBg)",
     color: "var(--text)",
     borderRadius: 12,
-    padding: "10px 10px",
+    padding: "10px 12px",
     outline: "none",
-    minWidth: 170,
+    fontWeight: 900,
   },
-
   primaryBtn: {
-    border: "1px solid rgba(37,99,235,0.35)",
-    borderRadius: 12,
-    background: "rgba(37,99,235,0.18)",
+    border: "1px solid var(--tabActiveBorder)",
+    background: "var(--tabActiveBg)",
     color: "var(--text)",
     padding: "10px 12px",
+    borderRadius: 12,
     cursor: "pointer",
     fontWeight: 1000,
-    outline: "none",
   },
-
   secondaryBtn: {
     border: "1px solid var(--border)",
-    borderRadius: 12,
-    background: "var(--controlBg2)",
+    background: "var(--controlBg)",
     color: "var(--text)",
     padding: "10px 12px",
+    borderRadius: 12,
     cursor: "pointer",
     fontWeight: 1000,
-    outline: "none",
   },
-
   dangerBtn: {
-    border: "1px solid rgba(239,68,68,0.35)",
-    borderRadius: 12,
-    background: "rgba(239,68,68,0.14)",
+    border: "1px solid rgba(239,68,68,.35)",
+    background: "rgba(239,68,68,.10)",
     color: "var(--text)",
     padding: "10px 12px",
-    cursor: "pointer",
-    fontWeight: 1000,
-    outline: "none",
-  },
-
-  iconBtn: {
-    border: "1px solid var(--border)",
     borderRadius: 12,
-    background: "var(--controlBg2)",
-    color: "var(--text)",
-    padding: "8px 10px",
     cursor: "pointer",
     fontWeight: 1000,
-    outline: "none",
   },
-
   smallBtn: {
     border: "1px solid var(--border)",
-    borderRadius: 12,
-    background: "rgba(148,163,184,0.08)",
+    background: "var(--controlBg)",
     color: "var(--text)",
-    padding: "8px 10px",
+    padding: "7px 10px",
+    borderRadius: 12,
     cursor: "pointer",
     fontWeight: 1000,
-    outline: "none",
     fontSize: 12,
   },
-
-  collapseBtn: {
-    width: "100%",
+  checkLabel: {
     display: "flex",
-    justifyContent: "space-between",
+    gap: 8,
     alignItems: "center",
-    gap: 12,
-    padding: 12,
-    borderRadius: 16,
+    color: "var(--muted)",
+    fontWeight: 1000,
+    userSelect: "none",
+  },
+  micro: {
+    color: "var(--muted)",
+    fontWeight: 900,
+    fontSize: 12,
+  },
+  lockNote: {
+    border: "1px solid rgba(245,158,11,.30)",
+    background: "rgba(245,158,11,.10)",
+    padding: "10px 12px",
+    borderRadius: 12,
+    fontWeight: 1000,
+    color: "var(--text)",
+  },
+  metaCard: {
     border: "1px solid var(--border)",
     background: "var(--card)",
-    boxShadow: "var(--shadowSoft)",
-    cursor: "pointer",
-    textAlign: "left",
+    borderRadius: 18,
+    padding: 12,
+    boxShadow: "0 10px 24px rgba(0,0,0,.06)",
   },
-
-  progressWrap: {
-    marginTop: 10,
-    width: "100%",
-    height: 12,
-    borderRadius: 999,
-    background: "rgba(148,163,184,0.16)",
+  metaIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     border: "1px solid var(--border)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: "0 0 auto",
+  },
+  badge: {
+    border: "1px solid var(--border)",
+    borderRadius: 999,
+    padding: "5px 10px",
+    fontWeight: 1000,
+    fontSize: 12,
+  },
+  progressWrap: {
+    height: 10,
+    borderRadius: 999,
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
     overflow: "hidden",
   },
-
-  progressBar: { height: "100%", borderRadius: 999, width: "0%", transition: "width 220ms ease" },
-
-  badge: { border: "1px solid var(--border)", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 1000 },
-
-  motivBox: { border: "1px solid var(--border)", borderRadius: 16, padding: 12, background: "rgba(148,163,184,0.06)" },
-
-  empty: { border: "1px dashed var(--border)", borderRadius: 16, padding: 14, background: "rgba(148,163,184,0.06)" },
-
-  // ✅ Modal corrigido: scroll interno + header sempre visível
-  modalOverlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.45)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start",
-    padding: 16,
-    zIndex: 9999,
-    overflowY: "auto",
+  progressBar: {
+    height: "100%",
+    borderRadius: 999,
   },
-
-  modalBox: {
-    width: "min(760px, 100%)",
-    borderRadius: 18,
-    border: "1px solid var(--border)",
-    background: "var(--card)",
-    boxShadow: "var(--shadowSoft)",
-    padding: 14,
-    overflowY: "auto",
-    maxHeight: "calc(100vh - 32px)",
-  },
-
-  modalHeader: {
-    position: "sticky",
-    top: 0,
-    zIndex: 2,
-    background: "var(--card)",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    alignItems: "center",
-    paddingBottom: 10,
-    borderBottom: "1px solid var(--border)",
-  },
-
-  modalFooter: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTop: "1px solid var(--border)",
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-
-  // ✅ novos estilos para resolver “data duplicada” visual
-  dateGroup: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    alignItems: "flex-end",
-    padding: 10,
-    border: "1px solid var(--border)",
-    borderRadius: 14,
-    background: "rgba(148,163,184,0.06)",
-  },
-  dateCol: {
-    display: "grid",
-    gap: 6,
-  },
-  miniLabel: {
-    fontSize: 12,
-    fontWeight: 950,
-    color: "var(--muted)",
-    letterSpacing: -0.1,
-  },
-
-  // ✅ seletor de ícones
   iconBlock: {
-    width: "min(560px, 100%)",
-    padding: 10,
+    minWidth: 260,
     border: "1px solid var(--border)",
+    background: "var(--card2)",
     borderRadius: 14,
-    background: "rgba(148,163,184,0.06)",
+    padding: 10,
   },
   iconRow: {
     display: "flex",
@@ -2084,11 +2084,57 @@ const styles = {
     border: "1px solid var(--border)",
     background: "var(--controlBg)",
     color: "var(--text)",
-    borderRadius: 12,
-    padding: "8px 10px",
+    width: 38,
+    height: 38,
+    borderRadius: 14,
     cursor: "pointer",
     fontWeight: 1000,
-    outline: "none",
-    minWidth: 42,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dateGroup: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "flex-end",
+    border: "1px solid var(--border)",
+    background: "var(--card2)",
+    borderRadius: 14,
+    padding: 10,
+  },
+  dateCol: {
+    display: "grid",
+    gap: 6,
+  },
+  miniLabel: {
+    fontSize: 12,
+    color: "var(--muted)",
+    fontWeight: 1000,
+  },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+    zIndex: 50,
+  },
+  modal: {
+    width: "min(860px, 100%)",
+    borderRadius: 18,
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    color: "var(--text)",
+    padding: 12,
+    boxShadow: "0 18px 40px rgba(0,0,0,.25)",
+  },
+  modalHead: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "center",
   },
 };

@@ -195,7 +195,15 @@ function CollapseSection({ id, title, subtitle, open, onToggle, children, rightS
   );
 }
 
-export default function Dashboard() {
+// ✅ agora recebe canWrite do App.jsx
+export default function Dashboard({ canWrite = true } = {}) {
+  // ✅ trava central (modo leitura)
+  function guardWrite(msg = "Assinatura inativa. Você está no modo leitura.") {
+    if (canWrite) return true;
+    alert(msg);
+    return false;
+  }
+
   const hoje = new Date();
   const currentYear = hoje.getFullYear();
 
@@ -296,6 +304,7 @@ export default function Dashboard() {
   }
 
   function toggleMenu(id) {
+    if (!canWrite) return; // ✅ read-only: não abre menu
     setMenuOpenId((prev) => {
       const next = prev === id ? null : id;
       if (next) openMenuAtButton(id);
@@ -341,6 +350,7 @@ export default function Dashboard() {
   }
 
   function toggleContaMenu(id) {
+    if (!canWrite) return; // ✅ read-only: não abre menu
     setContaMenuOpenId((prev) => {
       const next = prev === id ? null : id;
       if (next) openContaMenuAtButton(id);
@@ -386,6 +396,7 @@ export default function Dashboard() {
   }
 
   function toggleFixaMenu(id) {
+    if (!canWrite) return; // ✅ read-only: não abre menu
     setFixaMenuOpenId((prev) => {
       const next = prev === id ? null : id;
       if (next) openFixaMenuAtButton(id);
@@ -471,6 +482,8 @@ export default function Dashboard() {
   }
 
   async function criarConta() {
+    if (!guardWrite()) return;
+
     const nome = (contaNome || "").trim();
     const saldo = parseValor(contaSaldoInicial);
     if (!nome) return;
@@ -495,6 +508,7 @@ export default function Dashboard() {
   const [editContaSaldo, setEditContaSaldo] = useState("");
 
   function abrirEditarConta(c) {
+    if (!canWrite) return guardWrite();
     setEditContaId(c.id);
     setEditContaNome(c.nome ?? "");
     setEditContaTipo(c.tipo ?? "Conta");
@@ -510,6 +524,7 @@ export default function Dashboard() {
   const [lancamentos, setLancamentos] = useState([]);
 
   async function salvarEdicaoConta() {
+    if (!guardWrite()) return;
     if (!editContaId) return;
 
     const nome = (editContaNome || "").trim();
@@ -533,6 +548,7 @@ export default function Dashboard() {
   }
 
   async function excluirConta(c) {
+    if (!guardWrite()) return;
     if (!confirm(`Excluir a conta "${c.nome}"?`)) return;
 
     const { data: tem, error: e0 } = await supabase
@@ -606,6 +622,8 @@ export default function Dashboard() {
   }
 
   async function criarFixa() {
+    if (!guardWrite()) return;
+
     if (!fixasOk) {
       alert("A tabela 'fixas' ainda não existe no Supabase. Crie a tabela e tente novamente.");
       return;
@@ -655,6 +673,7 @@ export default function Dashboard() {
   const [editFixaContaId, setEditFixaContaId] = useState("");
 
   function abrirEditarFixa(f) {
+    if (!canWrite) return guardWrite();
     setEditFixaId(f.id);
     setEditFixaDescricao(f.descricao ?? "");
     setEditFixaValor(String(f.valor ?? ""));
@@ -671,6 +690,7 @@ export default function Dashboard() {
   }
 
   async function salvarEdicaoFixa() {
+    if (!guardWrite()) return;
     if (!editFixaId) return;
     if (!fixasOk) return;
 
@@ -703,6 +723,7 @@ export default function Dashboard() {
   }
 
   async function excluirFixa(f) {
+    if (!guardWrite()) return;
     if (!fixasOk) return;
     if (!confirm(`Excluir a fixa "${f.descricao}"?`)) return;
 
@@ -718,6 +739,8 @@ export default function Dashboard() {
   }
 
   async function garantirFixasNoMes(fixasList = null) {
+    // ✅ modo leitura: NÃO insere lançamentos automaticamente
+    if (!canWrite) return;
     if (!fixasOk) return;
 
     const baseFixas = Array.isArray(fixasList) ? fixasList : (Array.isArray(fixas) ? fixas : []);
@@ -831,6 +854,8 @@ export default function Dashboard() {
   }, [filtroYM, filtroContaId]);
 
   async function salvar() {
+    if (!guardWrite()) return;
+
     const vInformado = parseValor(valor);
     if (!vInformado) return;
 
@@ -920,6 +945,8 @@ export default function Dashboard() {
   }
 
   async function togglePago(l) {
+    if (!guardWrite()) return;
+
     const novo = !l.pago;
 
     const atual = lancamentos.map((x) => (x.id === l.id ? { ...x, pago: novo } : x));
@@ -934,6 +961,7 @@ export default function Dashboard() {
   }
 
   async function excluirLanc(l) {
+    if (!guardWrite()) return;
     if (!confirm("Excluir esse lançamento?")) return;
 
     const { error } = await supabase.from("lancamentos").delete().eq("id", l.id);
@@ -946,6 +974,7 @@ export default function Dashboard() {
   }
 
   async function excluirGrupo(l) {
+    if (!guardWrite()) return;
     if (!l.parcelado || !l.parcela_grupo) return;
     if (!confirm("Excluir TODAS as parcelas dessa compra?")) return;
 
@@ -971,6 +1000,7 @@ export default function Dashboard() {
   const [editParcelaTotal, setEditParcelaTotal] = useState(null);
 
   function abrirEditar(l) {
+    if (!canWrite) return guardWrite();
     setEditId(l.id);
     setEditData(l.data);
     setEditValor(String(l.valor ?? ""));
@@ -992,6 +1022,7 @@ export default function Dashboard() {
   }
 
   async function salvarEdicao() {
+    if (!guardWrite()) return;
     if (!editId) return;
 
     const v = parseValor(editValor);
@@ -1031,6 +1062,7 @@ export default function Dashboard() {
   const [grpValor, setGrpValor] = useState("");
 
   function abrirEditarGrupo(l) {
+    if (!canWrite) return guardWrite();
     if (!l.parcelado || !l.parcela_grupo) return;
 
     const base = stripParcelaSuffix(l.descricao || "");
@@ -1056,6 +1088,7 @@ export default function Dashboard() {
   }
 
   async function salvarEdicaoGrupo() {
+    if (!guardWrite()) return;
     if (!grpRef?.parcela_grupo) return;
 
     const { data: rows, error: e1 } = await supabase
@@ -1179,7 +1212,7 @@ export default function Dashboard() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editOpen, editGroupOpen, editContaOpen, editFixaOpen]);
+  }, [editOpen, editGroupOpen, editContaOpen, editFixaOpen, canWrite]);
 
   const saldosPorConta = useMemo(() => {
     const map = new Map();
@@ -1329,6 +1362,10 @@ export default function Dashboard() {
   }, [listaBase]);
 
   function exportarCsv() {
+    // ✅ modo leitura pode exportar? Você pediu "só olha".
+    // Então: vamos bloquear export também.
+    if (!guardWrite("Assinatura inativa. Exportação está indisponível no modo leitura.")) return;
+
     const rows = listaChips || [];
     const csv = buildCsv(rows);
     const fn = `GFD_${filtroYM}_${filtroContaId}_${chip}_${sortMode}.csv`.replace(/[^\w.\-]+/g, "_");
@@ -1344,7 +1381,7 @@ export default function Dashboard() {
     return map;
   }
 
-  function menuItemStyle({ danger = false } = {}) {
+  function menuItemStyle({ danger = false, disabled = false } = {}) {
     return {
       width: "100%",
       textAlign: "left",
@@ -1354,7 +1391,9 @@ export default function Dashboard() {
       background: danger ? "rgba(239,68,68,.08)" : "var(--card)",
       color: danger ? "var(--danger)" : "var(--text)",
       fontWeight: 1000,
-      cursor: "pointer",
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.55 : 1,
+      pointerEvents: disabled ? "none" : "auto",
     };
   }
 
@@ -1482,8 +1521,13 @@ export default function Dashboard() {
                           aria-haspopup="menu"
                           aria-expanded={menuOpenId === l.id}
                           aria-label="Abrir opções do lançamento"
-                          title="Opções"
-                          style={styles.iconButton}
+                          title={canWrite ? "Opções" : "Modo leitura"}
+                          style={{
+                            ...styles.iconButton,
+                            opacity: canWrite ? 1 : 0.45,
+                            cursor: canWrite ? "pointer" : "not-allowed",
+                          }}
+                          disabled={!canWrite}
                         >
                           ⋮
                         </button>
@@ -1518,7 +1562,37 @@ export default function Dashboard() {
 
               {/* ✅ MÊS/ANO: agora menor e proporcional */}
               <span style={styles.badgeMonthYear}>{meses[mes]} • {ano}</span>
+
+              {!canWrite ? (
+                <span style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(239,68,68,.45)",
+                  background: "rgba(239,68,68,.10)",
+                  color: "rgba(239,68,68,1)",
+                  fontWeight: 1100,
+                  fontSize: 12,
+                }}>
+                  🔒 Modo leitura (assinatura inativa)
+                </span>
+              ) : null}
             </div>
+
+            {!canWrite ? (
+              <div style={{
+                border: "1px solid rgba(239,68,68,.35)",
+                background: "rgba(239,68,68,.08)",
+                padding: 12,
+                borderRadius: 16,
+                fontWeight: 1000,
+                color: "var(--text)",
+              }}>
+                🔒 Sua assinatura está inativa. Você pode <b>visualizar</b> seus dados, mas não pode <b>criar, editar ou excluir</b>.
+              </div>
+            ) : null}
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
               <span style={styles.alertPill("danger")}>
@@ -1655,9 +1729,10 @@ export default function Dashboard() {
                   onChange={(e) => setContaNome(e.target.value)}
                   style={styles.input}
                   aria-label="Nome da conta"
+                  disabled={!canWrite}
                 />
 
-                <select value={contaTipo} onChange={(e) => setContaTipo(e.target.value)} style={styles.select} aria-label="Tipo da conta">
+                <select value={contaTipo} onChange={(e) => setContaTipo(e.target.value)} style={styles.select} aria-label="Tipo da conta" disabled={!canWrite}>
                   <option value="Conta">Conta</option>
                   <option value="Cartão">Cartão</option>
                   <option value="Dinheiro">Dinheiro</option>
@@ -1671,9 +1746,10 @@ export default function Dashboard() {
                   onChange={(e) => setContaSaldoInicial(e.target.value)}
                   style={styles.input}
                   aria-label="Saldo inicial da conta"
+                  disabled={!canWrite}
                 />
 
-                <button onClick={criarConta} style={styles.primaryBtn} aria-label="Criar conta">
+                <button onClick={criarConta} style={styles.primaryBtn} aria-label="Criar conta" disabled={!canWrite}>
                   ➕ Criar conta
                 </button>
 
@@ -1714,11 +1790,16 @@ export default function Dashboard() {
                     <button
                       ref={(node) => setContaBtnRef(c.id, node)}
                       onClick={() => toggleContaMenu(c.id)}
-                      title="Opções da conta"
+                      title={canWrite ? "Opções da conta" : "Modo leitura"}
                       aria-haspopup="menu"
                       aria-expanded={contaMenuOpenId === c.id}
                       aria-label="Abrir opções da conta"
-                      style={styles.iconButton}
+                      style={{
+                        ...styles.iconButton,
+                        opacity: canWrite ? 1 : 0.45,
+                        cursor: canWrite ? "pointer" : "not-allowed",
+                      }}
+                      disabled={!canWrite}
                     >
                       ⋮
                     </button>
@@ -1732,12 +1813,12 @@ export default function Dashboard() {
                 <div style={{ display: "grid", gap: 10 }}>
                   <label style={styles.label}>
                     Nome
-                    <input value={editContaNome} onChange={(e) => setEditContaNome(e.target.value)} style={styles.input} />
+                    <input value={editContaNome} onChange={(e) => setEditContaNome(e.target.value)} style={styles.input} disabled={!canWrite} />
                   </label>
 
                   <label style={styles.label}>
                     Tipo
-                    <select value={editContaTipo} onChange={(e) => setEditContaTipo(e.target.value)} style={styles.select}>
+                    <select value={editContaTipo} onChange={(e) => setEditContaTipo(e.target.value)} style={styles.select} disabled={!canWrite}>
                       <option value="Conta">Conta</option>
                       <option value="Cartão">Cartão</option>
                       <option value="Dinheiro">Dinheiro</option>
@@ -1753,12 +1834,13 @@ export default function Dashboard() {
                       onChange={(e) => setEditContaSaldo(e.target.value)}
                       placeholder="Ex: 1000 ou 1000,50"
                       style={styles.input}
+                      disabled={!canWrite}
                     />
                   </label>
 
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                     <button onClick={fecharEditarConta} style={styles.secondaryBtn}>Cancelar</button>
-                    <button onClick={salvarEdicaoConta} style={styles.primaryBtn}>Salvar</button>
+                    <button onClick={salvarEdicaoConta} style={styles.primaryBtn} disabled={!canWrite}>Salvar</button>
                   </div>
 
                   <p style={{ color: "var(--muted)", fontSize: 12, margin: 0, fontWeight: 900 }}>
@@ -1799,6 +1881,7 @@ export default function Dashboard() {
                   onChange={(e) => setFixaDescricao(e.target.value)}
                   style={styles.input}
                   aria-label="Descrição da fixa"
+                  disabled={!canWrite}
                 />
 
                 <input
@@ -1807,6 +1890,7 @@ export default function Dashboard() {
                   onChange={(e) => setFixaValor(e.target.value)}
                   style={styles.input}
                   aria-label="Valor da fixa"
+                  disabled={!canWrite}
                 />
 
                 <select
@@ -1818,12 +1902,13 @@ export default function Dashboard() {
                   }}
                   style={styles.select}
                   aria-label="Tipo da fixa"
+                  disabled={!canWrite}
                 >
                   <option value="despesa">Despesa</option>
                   <option value="receita">Receita</option>
                 </select>
 
-                <select value={fixaCategoria} onChange={(e) => setFixaCategoria(e.target.value)} style={styles.select} aria-label="Categoria da fixa">
+                <select value={fixaCategoria} onChange={(e) => setFixaCategoria(e.target.value)} style={styles.select} aria-label="Categoria da fixa" disabled={!canWrite}>
                   {categoriasFixaNovo.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
 
@@ -1837,26 +1922,28 @@ export default function Dashboard() {
                     onChange={(e) => setFixaDia(e.target.value)}
                     style={{ ...styles.input, width: 84 }}
                     aria-label="Dia de vencimento da fixa"
+                    disabled={!canWrite}
                   />
                 </label>
 
-                <select value={fixaContaId} onChange={(e) => setFixaContaId(e.target.value)} style={styles.select} aria-label="Conta vinculada da fixa">
+                <select value={fixaContaId} onChange={(e) => setFixaContaId(e.target.value)} style={styles.select} aria-label="Conta vinculada da fixa" disabled={!canWrite}>
                   <option value="">(Sem conta)</option>
                   {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
 
-                <button onClick={criarFixa} disabled={!fixasOk} style={styles.primaryBtn} aria-label="Criar fixa">
+                <button onClick={criarFixa} disabled={!fixasOk || !canWrite} style={styles.primaryBtn} aria-label="Criar fixa">
                   ➕ Criar fixa
                 </button>
 
                 <button
                   onClick={async () => {
+                    if (!guardWrite()) return;
                     const lista = await carregarFixas();
                     await garantirFixasNoMes(lista);
                     await carregarLancamentos();
                     alert("Fixas do mês geradas/verificadas.");
                   }}
-                  disabled={!fixasOk}
+                  disabled={!fixasOk || !canWrite}
                   style={styles.secondaryBtn}
                   aria-label="Gerar fixas do mês"
                 >
@@ -1897,11 +1984,16 @@ export default function Dashboard() {
                     <button
                       ref={(node) => setFixaBtnRef(f.id, node)}
                       onClick={() => toggleFixaMenu(f.id)}
-                      title="Opções da fixa"
+                      title={canWrite ? "Opções da fixa" : "Modo leitura"}
                       aria-haspopup="menu"
                       aria-expanded={fixaMenuOpenId === f.id}
                       aria-label="Abrir opções da fixa"
-                      style={styles.iconButton}
+                      style={{
+                        ...styles.iconButton,
+                        opacity: canWrite ? 1 : 0.45,
+                        cursor: canWrite ? "pointer" : "not-allowed",
+                      }}
+                      disabled={!canWrite}
                     >
                       ⋮
                     </button>
@@ -1915,12 +2007,12 @@ export default function Dashboard() {
                 <div style={{ display: "grid", gap: 10 }}>
                   <label style={styles.label}>
                     Descrição
-                    <input value={editFixaDescricao} onChange={(e) => setEditFixaDescricao(e.target.value)} style={styles.input} />
+                    <input value={editFixaDescricao} onChange={(e) => setEditFixaDescricao(e.target.value)} style={styles.input} disabled={!canWrite} />
                   </label>
 
                   <label style={styles.label}>
                     Valor
-                    <input value={editFixaValor} onChange={(e) => setEditFixaValor(e.target.value)} style={styles.input} />
+                    <input value={editFixaValor} onChange={(e) => setEditFixaValor(e.target.value)} style={styles.input} disabled={!canWrite} />
                   </label>
 
                   <label style={styles.label}>
@@ -1933,6 +2025,7 @@ export default function Dashboard() {
                         setEditFixaCategoria(t === "receita" ? "Salário" : "Alimentação");
                       }}
                       style={styles.select}
+                      disabled={!canWrite}
                     >
                       <option value="despesa">Despesa</option>
                       <option value="receita">Receita</option>
@@ -1941,7 +2034,7 @@ export default function Dashboard() {
 
                   <label style={styles.label}>
                     Categoria
-                    <select value={editFixaCategoria} onChange={(e) => setEditFixaCategoria(e.target.value)} style={styles.select}>
+                    <select value={editFixaCategoria} onChange={(e) => setEditFixaCategoria(e.target.value)} style={styles.select} disabled={!canWrite}>
                       {categoriasFixaEdit.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </label>
@@ -1955,6 +2048,7 @@ export default function Dashboard() {
                       value={editFixaDia}
                       onChange={(e) => setEditFixaDia(e.target.value)}
                       style={{ ...styles.input, width: 110 }}
+                      disabled={!canWrite}
                     />
                     <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 900 }}>
                       (se o mês tiver menos dias, ajusta para o último dia)
@@ -1963,7 +2057,7 @@ export default function Dashboard() {
 
                   <label style={styles.label}>
                     Conta
-                    <select value={editFixaContaId} onChange={(e) => setEditFixaContaId(e.target.value)} style={styles.select}>
+                    <select value={editFixaContaId} onChange={(e) => setEditFixaContaId(e.target.value)} style={styles.select} disabled={!canWrite}>
                       <option value="">(Sem conta)</option>
                       {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                     </select>
@@ -1971,7 +2065,7 @@ export default function Dashboard() {
 
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                     <button onClick={fecharEditarFixa} style={styles.secondaryBtn}>Cancelar</button>
-                    <button onClick={salvarEdicaoFixa} style={styles.primaryBtn}>Salvar</button>
+                    <button onClick={salvarEdicaoFixa} style={styles.primaryBtn} disabled={!canWrite}>Salvar</button>
                   </div>
                 </div>
               </Modal>
@@ -1992,15 +2086,16 @@ export default function Dashboard() {
             open={uiShowNovo}
             onToggle={() => setUiShowNovo((v) => !v)}
           >
-            <div style={{ ...styles.card, padding: 12 }}>
+            <div style={{ ...styles.card, padding: 12, opacity: canWrite ? 1 : 0.65 }}>
               <div style={styles.formRow}>
-                <input type="date" value={data} onChange={(e) => setData(e.target.value)} style={styles.input} />
+                <input type="date" value={data} onChange={(e) => setData(e.target.value)} style={styles.input} disabled={!canWrite} />
 
                 <input
                   placeholder="Valor (ex: 1200 ou 1200,50)"
                   value={valor}
                   onChange={(e) => setValor(e.target.value)}
                   style={styles.input}
+                  disabled={!canWrite}
                 />
 
                 <select
@@ -2011,16 +2106,17 @@ export default function Dashboard() {
                     setCategoria(t === "receita" ? "Salário" : "Alimentação");
                   }}
                   style={styles.select}
+                  disabled={!canWrite}
                 >
                   <option value="despesa">Despesa</option>
                   <option value="receita">Receita</option>
                 </select>
 
-                <select value={categoria} onChange={(e) => setCategoria(e.target.value)} style={styles.select}>
+                <select value={categoria} onChange={(e) => setCategoria(e.target.value)} style={styles.select} disabled={!canWrite}>
                   {categoriasNovo.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
 
-                <select value={contaId} onChange={(e) => setContaId(e.target.value)} style={styles.select} aria-label="Conta do lançamento">
+                <select value={contaId} onChange={(e) => setContaId(e.target.value)} style={styles.select} aria-label="Conta do lançamento" disabled={!canWrite}>
                   <option value="">(Sem conta)</option>
                   {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
@@ -2030,10 +2126,11 @@ export default function Dashboard() {
                   value={descricao}
                   onChange={(e) => setDescricao(e.target.value)}
                   style={styles.input}
+                  disabled={!canWrite}
                 />
 
                 <label style={styles.checkLabel}>
-                  <input type="checkbox" checked={parcelado} onChange={(e) => setParcelado(e.target.checked)} />
+                  <input type="checkbox" checked={parcelado} onChange={(e) => setParcelado(e.target.checked)} disabled={!canWrite} />
                   Parcelado
                 </label>
 
@@ -2048,17 +2145,18 @@ export default function Dashboard() {
                         value={qtdParcelas}
                         onChange={(e) => setQtdParcelas(e.target.value)}
                         style={{ ...styles.input, width: 84 }}
+                        disabled={!canWrite}
                       />
                     </label>
 
-                    <select value={modoParcela} onChange={(e) => setModoParcela(e.target.value)} style={styles.select} aria-label="Modo do valor parcelado">
+                    <select value={modoParcela} onChange={(e) => setModoParcela(e.target.value)} style={styles.select} aria-label="Modo do valor parcelado" disabled={!canWrite}>
                       <option value="dividir">Dividir total</option>
                       <option value="parcela">Valor é por parcela</option>
                     </select>
                   </>
                 ) : null}
 
-                <button onClick={salvar} style={styles.primaryBtn}>💾 Salvar</button>
+                <button onClick={salvar} style={styles.primaryBtn} disabled={!canWrite}>💾 Salvar</button>
 
                 <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 900 }}>
                   Dica premium: <b>Ctrl+Enter</b> salva quando você estiver aqui.
@@ -2081,7 +2179,7 @@ export default function Dashboard() {
             onToggle={() => setUiShowLista((v) => !v)}
             rightSlot={
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <button onClick={exportarCsv} style={styles.secondaryBtn} title="Exportar CSV">
+                <button onClick={exportarCsv} style={styles.secondaryBtn} title="Exportar CSV" disabled={!canWrite}>
                   📤 Exportar CSV
                 </button>
               </div>
@@ -2149,12 +2247,12 @@ export default function Dashboard() {
                 <div style={{ display: "grid", gap: 10 }}>
                   <label style={styles.label}>
                     Data
-                    <input type="date" value={editData} onChange={(e) => setEditData(e.target.value)} style={styles.input} />
+                    <input type="date" value={editData} onChange={(e) => setEditData(e.target.value)} style={styles.input} disabled={!canWrite} />
                   </label>
 
                   <label style={styles.label}>
                     Valor
-                    <input value={editValor} onChange={(e) => setEditValor(e.target.value)} style={styles.input} />
+                    <input value={editValor} onChange={(e) => setEditValor(e.target.value)} style={styles.input} disabled={!canWrite} />
                   </label>
 
                   <label style={styles.label}>
@@ -2167,6 +2265,7 @@ export default function Dashboard() {
                         setEditCategoria(t === "receita" ? "Salário" : "Alimentação");
                       }}
                       style={styles.select}
+                      disabled={!canWrite}
                     >
                       <option value="despesa">Despesa</option>
                       <option value="receita">Receita</option>
@@ -2175,14 +2274,14 @@ export default function Dashboard() {
 
                   <label style={styles.label}>
                     Categoria
-                    <select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} style={styles.select}>
+                    <select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} style={styles.select} disabled={!canWrite}>
                       {categoriasEdit.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </label>
 
                   <label style={styles.label}>
                     Conta
-                    <select value={editLancContaId ?? ""} onChange={(e) => setEditLancContaId(e.target.value || null)} style={styles.select}>
+                    <select value={editLancContaId ?? ""} onChange={(e) => setEditLancContaId(e.target.value || null)} style={styles.select} disabled={!canWrite}>
                       <option value="">(Sem conta)</option>
                       {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                     </select>
@@ -2190,7 +2289,7 @@ export default function Dashboard() {
 
                   <label style={styles.label}>
                     Descrição
-                    <input value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} style={styles.input} />
+                    <input value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} style={styles.input} disabled={!canWrite} />
                   </label>
 
                   {editIsParcelado ? (
@@ -2204,7 +2303,7 @@ export default function Dashboard() {
 
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                     <button onClick={fecharEditar} style={styles.secondaryBtn}>Cancelar</button>
-                    <button onClick={salvarEdicao} style={styles.primaryBtn}>Salvar</button>
+                    <button onClick={salvarEdicao} style={styles.primaryBtn} disabled={!canWrite}>Salvar</button>
                   </div>
                 </div>
               </Modal>
@@ -2215,7 +2314,7 @@ export default function Dashboard() {
                 <div style={{ display: "grid", gap: 10 }}>
                   <label style={styles.label}>
                     Descrição base
-                    <input value={grpDescricaoBase} onChange={(e) => setGrpDescricaoBase(e.target.value)} style={styles.input} />
+                    <input value={grpDescricaoBase} onChange={(e) => setGrpDescricaoBase(e.target.value)} style={styles.input} disabled={!canWrite} />
                   </label>
 
                   <label style={styles.label}>
@@ -2228,6 +2327,7 @@ export default function Dashboard() {
                         setGrpCategoria(t === "receita" ? "Salário" : "Alimentação");
                       }}
                       style={styles.select}
+                      disabled={!canWrite}
                     >
                       <option value="despesa">Despesa</option>
                       <option value="receita">Receita</option>
@@ -2236,29 +2336,29 @@ export default function Dashboard() {
 
                   <label style={styles.label}>
                     Categoria
-                    <select value={grpCategoria} onChange={(e) => setGrpCategoria(e.target.value)} style={styles.select}>
+                    <select value={grpCategoria} onChange={(e) => setGrpCategoria(e.target.value)} style={styles.select} disabled={!canWrite}>
                       {categoriasGrupo.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </label>
 
                   <label style={styles.label}>
                     Conta
-                    <select value={grpContaId ?? ""} onChange={(e) => setGrpContaId(e.target.value || null)} style={styles.select}>
+                    <select value={grpContaId ?? ""} onChange={(e) => setGrpContaId(e.target.value || null)} style={styles.select} disabled={!canWrite}>
                       <option value="">(Sem conta)</option>
                       {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                     </select>
                   </label>
 
-                  <div style={{ ...styles.card2, padding: 12 }}>
+                  <div style={{ ...styles.card2, padding: 12, opacity: canWrite ? 1 : 0.7 }}>
                     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                       <b>Valor</b>
 
-                      <select value={grpModo} onChange={(e) => setGrpModo(e.target.value)} style={styles.select}>
+                      <select value={grpModo} onChange={(e) => setGrpModo(e.target.value)} style={styles.select} disabled={!canWrite}>
                         <option value="parcela">Valor por parcela</option>
                         <option value="total">Valor total do grupo</option>
                       </select>
 
-                      <input value={grpValor} onChange={(e) => setGrpValor(e.target.value)} style={{ ...styles.input, width: 160 }} />
+                      <input value={grpValor} onChange={(e) => setGrpValor(e.target.value)} style={{ ...styles.input, width: 160 }} disabled={!canWrite} />
                       <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 900 }}>
                         {grpModo === "total" ? "Divide automaticamente e ajusta a última parcela." : "Aplica o mesmo valor a todas."}
                       </span>
@@ -2267,7 +2367,7 @@ export default function Dashboard() {
 
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                     <button onClick={fecharEditarGrupo} style={styles.secondaryBtn}>Cancelar</button>
-                    <button onClick={salvarEdicaoGrupo} style={styles.primaryBtn}>Salvar grupo</button>
+                    <button onClick={salvarEdicaoGrupo} style={styles.primaryBtn} disabled={!canWrite}>Salvar grupo</button>
                   </div>
                 </div>
               </Modal>
@@ -2279,7 +2379,9 @@ export default function Dashboard() {
           </CollapseSection>
         )}
 
-        {menuOpenId ? (
+        {/* ✅ Menus: no modo leitura eles nem abrem (toggleMenu/toggleContaMenu/toggleFixaMenu já barram).
+            Mas se abrir por algum bug, ainda assim não renderizamos ações de escrita. */}
+        {menuOpenId && canWrite ? (
           <div
             ref={menuBoxRef}
             role="menu"
@@ -2324,7 +2426,7 @@ export default function Dashboard() {
           </div>
         ) : null}
 
-        {contaMenuOpenId ? (
+        {contaMenuOpenId && canWrite ? (
           <div
             ref={contaMenuRef}
             role="menu"
@@ -2358,7 +2460,7 @@ export default function Dashboard() {
           </div>
         ) : null}
 
-        {fixaMenuOpenId ? (
+        {fixaMenuOpenId && canWrite ? (
           <div
             ref={fixaMenuRef}
             role="menu"

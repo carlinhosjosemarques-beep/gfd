@@ -18,6 +18,24 @@ export default function Login({ theme, setTheme }) {
     setMsg(null);
   }, [mode]);
 
+  function friendlyAuthError(err) {
+    const m = (err?.message || "").toLowerCase();
+
+    if (m.includes("database error saving new user")) {
+      return "Erro ao criar usuário no banco. Isso normalmente acontece quando o trigger/tabela de profiles está com alguma coluna obrigatória sem default. (Agora que você ajustou, deve funcionar.)";
+    }
+    if (m.includes("invalid login credentials")) {
+      return "E-mail ou senha inválidos.";
+    }
+    if (m.includes("email not confirmed")) {
+      return "Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada (e spam).";
+    }
+    if (m.includes("user already registered")) {
+      return "Esse e-mail já está cadastrado. Clique em “Já tenho conta”.";
+    }
+    return err?.message || "Erro ao autenticar. Tente novamente.";
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setMsg(null);
@@ -29,15 +47,41 @@ export default function Login({ theme, setTheme }) {
     setLoading(true);
     try {
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
+        const { error } = await supabase.auth.signInWithPassword({
+          email: em,
+          password: pw,
+        });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({ email: em, password: pw });
+        const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+
+        const { data, error } = await supabase.auth.signUp({
+          email: em,
+          password: pw,
+          options: {
+            // ✅ importante para produção (Vercel/Domínio)
+            emailRedirectTo: redirectTo,
+          },
+        });
+
         if (error) throw error;
-        setMsg("Conta criada! Se o Supabase exigir confirmação, verifique seu e-mail.");
+
+        // Se confirmação de e-mail estiver ativa, session pode vir null.
+        // Mesmo assim, conta foi criada com sucesso.
+        const needsConfirm = !data?.session;
+
+        setSenha("");
+        setMsg(
+          needsConfirm
+            ? "Conta criada! Agora confirme pelo e-mail enviado (veja também o spam). Depois volte e faça login."
+            : "Conta criada com sucesso! Entrando…"
+        );
+
+        // Se já logou automaticamente, troca para login só por UX
+        setMode("login");
       }
     } catch (err) {
-      setMsg(err?.message || "Erro ao autenticar. Tente novamente.");
+      setMsg(friendlyAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -46,10 +90,16 @@ export default function Login({ theme, setTheme }) {
   async function resetSenha() {
     const em = (email || "").trim().toLowerCase();
     if (!em) return setMsg("Digite seu e-mail para recuperar a senha.");
+
     setLoading(true);
     setMsg(null);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(em);
+      const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(em, {
+        redirectTo,
+      });
+
       if (error) throw error;
       setMsg("Enviamos um e-mail para redefinir sua senha.");
     } catch (err) {
@@ -175,7 +225,8 @@ const styles = {
     width: "100%",
     maxWidth: 1100,
     margin: "0 auto",
-    padding: "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left))",
+    padding:
+      "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left))",
     minHeight: "100dvh",
     boxSizing: "border-box",
   },
