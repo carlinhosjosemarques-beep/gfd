@@ -37,24 +37,31 @@ function readToken(req, body) {
         ? String(headerTokenRaw[0] || "").trim()
         : "";
 
-  // Body (vários nomes possíveis)
-  const bodyToken =
-    (body?.token ||
+  // Body (vários nomes possíveis) + ✅ inclui signature
+  const bodyToken = String(
+    body?.token ||
       body?.Token ||
       body?.webhook_token ||
       body?.webhookToken ||
       body?.secret ||
       body?.Secret ||
+      body?.signature ||              // ✅ importante
+      body?.Signature ||              // ✅ importante
       body?.data?.token ||
       body?.data?.webhook_token ||
       body?.data?.secret ||
-      "").toString().trim();
+      body?.data?.signature ||        // ✅ importante
+      ""
+  ).trim();
 
-  // Querystring (por desencargo)
-  const queryToken =
-    (req.query?.token || req.query?.webhook_token || req.query?.secret || "")
-      .toString()
-      .trim();
+  // Querystring ✅ inclui signature (é o que está vindo no seu log)
+  const queryToken = String(
+    req.query?.signature ||           // ✅ PRINCIPAL (Kiwify)
+      req.query?.token ||
+      req.query?.webhook_token ||
+      req.query?.secret ||
+      ""
+  ).trim();
 
   return headerToken || bodyToken || queryToken || "";
 }
@@ -78,17 +85,22 @@ export default async function handler(req, res) {
     const debug = String(process.env.DEBUG_WEBHOOK || "").trim() === "true";
 
     if (!expectedToken) {
-      return res.status(500).json({ ok: false, error: "Missing KIWIFY_WEBHOOK_TOKEN env" });
+      return res
+        .status(500)
+        .json({ ok: false, error: "Missing KIWIFY_WEBHOOK_TOKEN env" });
     }
 
     // body (Vercel às vezes manda string)
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const body =
+      typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+
     const receivedToken = readToken(req, body);
 
     if (debug) {
       console.log("[KIWIFY] expected:", maskToken(expectedToken));
       console.log("[KIWIFY] received:", maskToken(receivedToken));
       console.log("[KIWIFY] headers keys:", Object.keys(req.headers || {}));
+      console.log("[KIWIFY] query keys:", Object.keys(req.query || {})); // ✅ útil
       console.log("[KIWIFY] body keys:", Object.keys(body || {}));
     }
 
@@ -97,7 +109,6 @@ export default async function handler(req, res) {
       return res.status(401).json({
         ok: false,
         error: "Invalid webhook token",
-        // ajuda sem vazar segredo
         hint: debug
           ? {
               expected: maskToken(expectedToken),
@@ -116,24 +127,19 @@ export default async function handler(req, res) {
       body?.data?.email;
 
     if (!email) {
-      return res.status(400).json({ ok: false, error: "Missing customer email in payload" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "Missing customer email in payload" });
     }
 
     const emailNorm = email.toLowerCase().trim();
 
     // Identificar evento/status de forma tolerante
     const event =
-      body?.event ||
-      body?.type ||
-      body?.webhook_event ||
-      body?.data?.event ||
-      "";
+      body?.event || body?.type || body?.webhook_event || body?.data?.event || "";
 
     const status =
-      body?.status ||
-      body?.data?.status ||
-      body?.subscription?.status ||
-      "";
+      body?.status || body?.data?.status || body?.subscription?.status || "";
 
     const norm = `${event} ${status}`.toLowerCase();
 
@@ -176,13 +182,16 @@ export default async function handler(req, res) {
     if (!prof) {
       return res.status(200).json({
         ok: true,
-        warning: "No profile found for this email. User must sign up in the app with same email.",
+        warning:
+          "No profile found for this email. User must sign up in the app with same email.",
       });
     }
 
     // ✅ NÃO sobrescreve acesso manual/promo
     if (prof.access_origin === "admin" || prof.access_origin === "promo") {
-      return res.status(200).json({ ok: true, skipped: "manual_access_protected" });
+      return res
+        .status(200)
+        .json({ ok: true, skipped: "manual_access_protected" });
     }
 
     // ✅ Atualização final
@@ -198,7 +207,9 @@ export default async function handler(req, res) {
       .from("profiles")
       .update(updates)
       .eq("id", prof.id)
-      .select("id,email,access_status,access_until,subscription_status,access_origin")
+      .select(
+        "id,email,access_status,access_until,subscription_status,access_origin"
+      )
       .maybeSingle();
 
     if (upErr) throw upErr;
@@ -206,6 +217,8 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, updated, norm });
   } catch (e) {
     console.error("[KIWIFY] error:", e);
-    return res.status(400).json({ ok: false, error: e?.message || "Webhook error" });
+    return res
+      .status(400)
+      .json({ ok: false, error: e?.message || "Webhook error" });
   }
 }
