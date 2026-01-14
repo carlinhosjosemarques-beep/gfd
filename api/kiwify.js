@@ -1,42 +1,105 @@
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // ⚠️ NUNCA expor no front
+  process.env.SUPABASE_SERVICE_ROLE_KEY // ⚠️ nunca no front
 );
 
+// ======================
+// Utils
+// ======================
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d.toISOString();
 }
 
-export default async function handler(req, res) {
-  // Preflight
-  if (req.method === "OPTIONS") return res.status(200).end();
+function mask(t = "") {
+  if (!t) return "";
+  if (t.length <= 6) return "***";
+  return `${t.slice(0, 3)}***${t.slice(-3)}(len=${t.length})`;
+}
 
-  // Só POST
+// ======================
+// Assinatura Kiwify
+// ======================
+function isValidSignature({ rawBody, receivedSignature, secret }) {
+  if (!receivedSignature || !secret) return false;
+
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
+
+  return crypto.timingSafeEqual(
+    Buffer.from(expected),
+    Buffer.from(receivedSignature)
+  );
+}
+
+// ======================
+// Handler
+// ======================
+export default async function handler(req, res) {
+  if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
   try {
-    const debug = String(process.env.DEBUG_WEBHOOK || "") === "true";
+    const secret = (process.env.KIWIFY_WEBHOOK_TOKEN || "").trim();
+    const debug = process.env.DEBUG_WEBHOOK === "true";
 
-    const body =
-      typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+    if (!secret) {
+      return res.status(500).json({
+        ok: false,
+        error: "Missing KIWIFY_WEBHOOK_TOKEN env",
+      });
+    }
+
+    // ⚠️ Vercel pode entregar body como string
+    const rawBody =
+      typeof req.body === "string"
+        ? req.body
+        : JSON.stringify(req.body || {});
+
+    const body = JSON.parse(rawBody);
+
+    const receivedSignature =
+      req.query?.signature ||
+      req.headers?.["x-kiwify-signature"] ||
+      "";
 
     if (debug) {
-      console.log("[KIWIFY] headers keys:", Object.keys(req.headers || {}));
-      console.log("[KIWIFY] query keys:", Object.keys(req.query || {}));
+      console.log("[KIWIFY] secret:", mask(secret));
+      console.log("[KIWIFY] signature received:", mask(receivedSignature));
       console.log("[KIWIFY] body keys:", Object.keys(body || {}));
     }
 
-    // 📧 Email (estrutura real da Kiwify)
+    // ✅ VALIDAÇÃO CORRETA
+    const valid = isValidSignature({
+      rawBody,
+      receivedSignature,
+      secret,
+    });
+
+    if (!valid) {
+      return res.status(401).json({
+        ok: false,
+        error: "Invalid webhook signature",
+      });
+    }
+
+    // ======================
+    // Email
+    // ======================
     const email =
       body?.customer?.email ||
       body?.buyer?.email ||
-      body?.email;
+      body?.email ||
+      body?.data?.customer?.email ||
+      body?.data?.email;
 
     if (!email) {
       return res.status(400).json({
@@ -47,85 +110,77 @@ export default async function handler(req, res) {
 
     const emailNorm = email.toLowerCase().trim();
 
-    // 📌 Status real que a Kiwify envia
-    const status =
-      body?.order_status ||
-      body?.status ||
-      "";
+    // ======================
+    // Status
+    // ======================
+    const event = body?.event || body?.type || "";
+    const status = body?.order_status || body?.status || "";
 
-    const statusNorm = status.toLowerCase();
+    const norm = `${event} ${status}`.toLowerCase();
 
     const isPaid =
-      statusNorm === "paid" ||
-      statusNorm === "approved";
+      norm.includes("paid") ||
+      norm.includes("approved") ||
+      norm.includes("aprov") ||
+      norm.includes("active") ||
+      norm.includes("renew");
 
     const isBlocked =
-      statusNorm === "refused" ||
-      statusNorm === "canceled" ||
-      statusNorm === "refunded" ||
-      statusNorm === "chargeback";
+      norm.includes("cancel") ||
+      norm.includes("refunded") ||
+      norm.includes("chargeback") ||
+      norm.includes("expired") ||
+      norm.includes("overdue");
 
     if (!isPaid && !isBlocked) {
-      return res.status(200).json({
-        ok: true,
-        ignored: true,
-        status: statusNorm,
-      });
+      return res.status(200).json({ ok: true, ignored: true });
     }
 
-    // 🔎 Busca profile
-    const { data: prof, error: profErr } = await supabase
+    // ======================
+    // Profile
+    // ======================
+    const { data: prof, error } = await supabase
       .from("profiles")
       .select("id, access_origin")
       .eq("email", emailNorm)
       .maybeSingle();
 
-    if (profErr) throw profErr;
+    if (error) throw error;
 
     if (!prof) {
       return res.status(200).json({
         ok: true,
-        warning: "User not found. Will activate after signup.",
+        warning: "User not found yet",
       });
     }
 
-    // 🛡️ Não sobrescreve acesso manual
-    if (prof.access_origin === "admin" || prof.access_origin === "promo") {
+    if (["admin", "promo"].includes(prof.access_origin)) {
       return res.status(200).json({
         ok: true,
-        skipped: "manual_access",
+        skipped: "manual_access_protected",
       });
     }
 
-    // ✅ Atualiza assinatura
     const updates = {
-      subscription_status: isPaid ? "active" : "inactive",
       access_status: isPaid ? "active" : "inactive",
+      subscription_status: isPaid ? "active" : "inactive",
       access_until: isPaid ? addDays(new Date(), 30) : null,
       access_origin: "paid",
     };
 
-    const { data: updated, error: upErr } = await supabase
+    const { error: upErr } = await supabase
       .from("profiles")
       .update(updates)
-      .eq("id", prof.id)
-      .select(
-        "id,email,access_status,access_until,subscription_status,access_origin"
-      )
-      .maybeSingle();
+      .eq("id", prof.id);
 
     if (upErr) throw upErr;
 
-    return res.status(200).json({
-      ok: true,
-      updated,
-      status: statusNorm,
-    });
+    return res.status(200).json({ ok: true });
   } catch (err) {
-    console.error("[KIWIFY] error:", err);
+    console.error("[KIWIFY] ERROR:", err);
     return res.status(500).json({
       ok: false,
-      error: "Webhook processing failed",
+      error: "Webhook processing error",
     });
   }
 }
