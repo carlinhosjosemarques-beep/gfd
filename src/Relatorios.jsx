@@ -1,7 +1,7 @@
 // ✅ AJUSTE PONTUAL: CANWRITE (ASSINATURA) NO RELATORIOS.JSX
 // - NÃO remove nada do que funciona
-// - Só adiciona o "canWrite" e bloqueia exportação/uso quando não assinado
-// - Mantém seu layout e lógica
+// - Troca checagem antiga da tabela "assinaturas" por "profiles" (admin/promo/lifetime)
+// - Mantém layout e lógica
 
 // =========================
 // RELATORIOS.JSX — FINAL (MOBILE FRIENDLY)
@@ -234,6 +234,21 @@ function CollapseSection({ title, subtitle, open, onToggle, children, rightSlot 
   );
 }
 
+/** ✅ Gate único de acesso (mesma ideia do Dashboard) */
+function isAccessActive(p) {
+  if (!p) return false;
+
+  const origin = String(p.access_origin || "").toLowerCase();
+  if (origin === "admin" || origin === "promo") return true;
+
+  const accessOk = String(p.access_status || "").toLowerCase() === "active";
+  const subOk = String(p.subscription_status || "").toLowerCase() === "active";
+
+  const untilOk = !p.access_until || new Date(p.access_until).getTime() >= Date.now();
+
+  return accessOk && subOk && untilOk;
+}
+
 /**
  * ✅ Relatórios integrado ao tema global do App.jsx
  * - Usa vars: --bg, --card, --text, --muted, --border, --shadowSoft, --controlBg, --controlBg2, --warn
@@ -246,7 +261,7 @@ export default function Relatorios() {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
 
-  // ✅ CANWRITE/ASSINATURA
+  // ✅ CANWRITE/ASSINATURA (AGORA via PROFILES)
   const [canWrite, setCanWrite] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
 
@@ -262,10 +277,7 @@ export default function Relatorios() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // ✅ Busca status da assinatura e seta canWrite
-  // Regras:
-  // - se existir tabela "assinaturas" com (user_id, status) => status "active" libera
-  // - se não existir / falhar, fica false (bloqueado)
+  // ✅ Busca acesso/assinatura no PROFILES (admin/promo/lifetime)
   useEffect(() => {
     if (!user) {
       setCanWrite(false);
@@ -276,20 +288,19 @@ export default function Relatorios() {
       setPlanLoading(true);
       try {
         const { data, error } = await supabase
-          .from("assinaturas")
-          .select("status, plano, expires_at")
-          .eq("user_id", user.id)
+          .from("profiles")
+          .select("access_origin, access_status, subscription_status, access_until")
+          .eq("id", user.id)
           .maybeSingle();
 
         if (error) {
-          console.warn("Assinatura: erro ao consultar, mantendo bloqueado.", error);
+          console.warn("Profiles: erro ao consultar. Mantendo bloqueado.", error);
           setCanWrite(false);
         } else {
-          const status = String(data?.status || "").toLowerCase();
-          setCanWrite(status === "active" || status === "ativa" || status === "paid");
+          setCanWrite(isAccessActive(data));
         }
       } catch (e) {
-        console.warn("Assinatura: exceção, mantendo bloqueado.", e);
+        console.warn("Profiles: exceção. Mantendo bloqueado.", e);
         setCanWrite(false);
       } finally {
         setPlanLoading(false);

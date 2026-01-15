@@ -1284,11 +1284,7 @@ export default function Metas({ canWrite = false }) {
         </CollapseSection>
 
         {/* ====== METAS ATIVAS / ARQUIVADAS + MODAIS (continua na PARTE 2) ====== */}
-/* =========================
-   METAS.JSX — PARTE 2/2
-   ========================= */
-
-/* ====== LISTAS ====== */
+        
         <CollapseSection
           id="ativas"
           title={`Metas ativas (${metasAtivas.length})`}
