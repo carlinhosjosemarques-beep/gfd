@@ -36,7 +36,8 @@ function readSignature(req) {
     (h["x-kiwify-signature"] ||
       h["x-webhook-signature"] ||
       h["x-signature"] ||
-      "").toString()
+      "")
+      .toString()
       .trim();
 
   return sigQuery || sigHeader || "";
@@ -113,7 +114,8 @@ export default async function handler(req, res) {
     const receivedSig = readSignature(req);
 
     const secretForSignature =
-      getEnv("KIWIFY_WEBHOOK_SECRET") || getEnv("KIWIFY_WEBHOOK_SIGNATURE_SECRET");
+      getEnv("KIWIFY_WEBHOOK_SECRET") ||
+      getEnv("KIWIFY_WEBHOOK_SIGNATURE_SECRET");
 
     const tokenExpected =
       getEnv("KIWIFY_WEBHOOK_TOKEN") || getEnv("KIWIFY_WEBHOOK_TOKEN_SECRET");
@@ -128,9 +130,6 @@ export default async function handler(req, res) {
       console.log("[KIWIFY] raw len:", raw.length);
     }
 
-    // ✅ Auth:
-    // - Se veio signature E temos secret => valida HMAC
-    // - Caso contrário => fallback para token fixo
     if (receivedSig && secretForSignature) {
       const expectedSig = computeHmacSha1Hex(secretForSignature, raw);
 
@@ -143,7 +142,10 @@ export default async function handler(req, res) {
           ok: false,
           error: "Invalid signature",
           hint: debug
-            ? { received: maskToken(receivedSig), expected: maskToken(expectedSig) }
+            ? {
+                received: maskToken(receivedSig),
+                expected: maskToken(expectedSig),
+              }
             : undefined,
         });
       }
@@ -168,7 +170,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // ✅ fluxo
     const email =
       body?.customer?.email ||
       body?.buyer?.email ||
@@ -177,19 +178,17 @@ export default async function handler(req, res) {
       body?.data?.email;
 
     if (!email) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "Missing customer email in payload" });
+      return res.status(200).json({
+        ok: true,
+        ignored: true,
+        reason: "missing_email_in_payload",
+      });
     }
 
     const emailNorm = String(email).toLowerCase().trim();
 
     const event =
-      body?.event ||
-      body?.type ||
-      body?.webhook_event ||
-      body?.data?.event ||
-      "";
+      body?.event || body?.type || body?.webhook_event || body?.data?.event || "";
 
     const status =
       body?.status ||
@@ -243,7 +242,10 @@ export default async function handler(req, res) {
     }
 
     if (prof.access_origin === "admin" || prof.access_origin === "promo") {
-      return res.status(200).json({ ok: true, skipped: "manual_access_protected" });
+      return res.status(200).json({
+        ok: true,
+        skipped: "manual_access_protected",
+      });
     }
 
     const updates = {
@@ -258,7 +260,9 @@ export default async function handler(req, res) {
       .from("profiles")
       .update(updates)
       .eq("id", prof.id)
-      .select("id,email,access_status,access_until,subscription_status,access_origin")
+      .select(
+        "id,email,access_status,access_until,subscription_status,access_origin"
+      )
       .maybeSingle();
 
     if (upErr) throw upErr;
