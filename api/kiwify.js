@@ -3,16 +3,10 @@ import crypto from "crypto";
 
 export const config = {
   api: {
-    bodyParser: false, // ✅ necessário para ler o RAW body e validar signature
+    bodyParser: false,
   },
 };
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // ⚠️ NUNCA expor no front
-);
-
-// ✅ máscara pra log (não vaza segredo)
 function maskToken(t) {
   const s = String(t || "");
   if (!s) return "";
@@ -33,7 +27,6 @@ function timingSafeEq(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
-// ✅ Pega signature (Kiwify está mandando via query ?signature=...)
 function readSignature(req) {
   const q = req.query || {};
   const h = req.headers || {};
@@ -48,17 +41,21 @@ function readSignature(req) {
   return sigQuery || sigHeader || "";
 }
 
-// ✅ (fallback) se um dia a Kiwify mandar token fixo no header
 function readFixedToken(req, body) {
   const h = req.headers || {};
   const headerToken =
     (h["x-kiwify-token"] ||
       h["x-webhook-token"] ||
       h["authorization"] ||
-      "").toString().replace(/^Bearer\s+/i, "").trim();
+      "")
+      .toString()
+      .replace(/^Bearer\s+/i, "")
+      .trim();
 
   const bodyToken =
-    (body?.token || body?.webhook_token || body?.secret || "").toString().trim();
+    (body?.token || body?.webhook_token || body?.secret || "")
+      .toString()
+      .trim();
 
   return headerToken || bodyToken || "";
 }
@@ -67,10 +64,28 @@ function computeHmacSha1Hex(secret, rawBodyBuffer) {
   return crypto.createHmac("sha1", secret).update(rawBodyBuffer).digest("hex");
 }
 
-function addDays(date, days) {
+function addDaysISO(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d.toISOString();
+}
+
+function getEnv(name) {
+  return String(process.env[name] || "").trim();
+}
+
+function getSupabase() {
+  const url = getEnv("SUPABASE_URL") || getEnv("VITE_SUPABASE_URL");
+  const key =
+    getEnv("SUPABASE_SERVICE_ROLE_KEY") ||
+    getEnv("SUPABASE_SERVICE_ROLE") ||
+    getEnv("SUPABASE_SERVICE_ROLEKEY") ||
+    getEnv("SUPABASE_SERVICE_ROLE");
+
+  if (!url) throw new Error("Missing SUPABASE_URL env");
+  if (!key) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY env");
+
+  return createClient(url, key);
 }
 
 export default async function handler(req, res) {
@@ -79,22 +94,14 @@ export default async function handler(req, res) {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
-  const debug = String(process.env.DEBUG_WEBHOOK || "").trim() === "true";
+  const debug = getEnv("DEBUG_WEBHOOK") === "true";
 
   try {
-    const secret = (process.env.KIWIFY_WEBHOOK_SECRET || "").trim();
-    if (!secret) {
-      return res.status(500).json({
-        ok: false,
-        error: "Missing KIWIFY_WEBHOOK_SECRET env",
-      });
-    }
+    const supabase = getSupabase();
 
-    // ✅ raw body
     const raw = await readRawBody(req);
     const rawText = raw.toString("utf8") || "";
 
-    // ✅ parse body (se vier vazio ou inválido, não quebra)
     let body = {};
     try {
       body = rawText ? JSON.parse(rawText) : {};
@@ -102,23 +109,38 @@ export default async function handler(req, res) {
       body = {};
     }
 
-    // ✅ 1) Validação por SIGNATURE (se vier)
     const receivedSig = readSignature(req);
 
+    const secretForSignature =
+      getEnv("KIWIFY_WEBHOOK_SECRET") || getEnv("KIWIFY_WEBHOOK_SIGNATURE_SECRET");
+
+    const tokenExpected =
+      getEnv("KIWIFY_WEBHOOK_TOKEN") || getEnv("KIWIFY_WEBHOOK_TOKEN_SECRET");
+
     if (debug) {
-      console.log("[KIWIFY] secret:", maskToken(secret));
-      console.log("[KIWIFY] signature received:", maskToken(receivedSig));
+      console.log("[KIWIFY] sig received:", maskToken(receivedSig));
+      console.log("[KIWIFY] has secret:", Boolean(secretForSignature));
+      console.log("[KIWIFY] has token:", Boolean(tokenExpected));
       console.log("[KIWIFY] query keys:", Object.keys(req.query || {}));
       console.log("[KIWIFY] headers keys:", Object.keys(req.headers || {}));
       console.log("[KIWIFY] body keys:", Object.keys(body || {}));
       console.log("[KIWIFY] raw len:", raw.length);
     }
 
+    // 1) Se veio signature, valida via HMAC-SHA1 (precisa do secret)
     if (receivedSig) {
-      const expectedSig = computeHmacSha1Hex(secret, raw);
+      if (!secretForSignature) {
+        return res.status(401).json({
+          ok: false,
+          error:
+            "Signature received but KIWIFY_WEBHOOK_SECRET is not set (required to validate signature).",
+        });
+      }
+
+      const expectedSig = computeHmacSha1Hex(secretForSignature, raw);
 
       if (debug) {
-        console.log("[KIWIFY] signature expected:", maskToken(expectedSig));
+        console.log("[KIWIFY] sig expected:", maskToken(expectedSig));
       }
 
       if (!timingSafeEq(receivedSig, expectedSig)) {
@@ -126,22 +148,24 @@ export default async function handler(req, res) {
           ok: false,
           error: "Invalid signature",
           hint: debug
-            ? { received: maskToken(receivedSig), expected: maskToken(expectedSig) }
+            ? {
+                received: maskToken(receivedSig),
+                expected: maskToken(expectedSig),
+              }
             : undefined,
         });
       }
     } else {
-      // ✅ 2) fallback: token fixo (caso você mude no painel da Kiwify)
-      const tokenExpected = (process.env.KIWIFY_WEBHOOK_TOKEN || "").trim();
-      const tokenReceived = readFixedToken(req, body);
-
+      // 2) Se NÃO veio signature, valida por token fixo
       if (!tokenExpected) {
         return res.status(401).json({
           ok: false,
           error:
-            "No signature received and KIWIFY_WEBHOOK_TOKEN is not set (configure one auth method).",
+            "No signature received and KIWIFY_WEBHOOK_TOKEN is not set (configure at least one auth method).",
         });
       }
+
+      const tokenReceived = readFixedToken(req, body);
 
       if (debug) {
         console.log("[KIWIFY] token expected:", maskToken(tokenExpected));
@@ -149,14 +173,10 @@ export default async function handler(req, res) {
       }
 
       if (tokenReceived !== tokenExpected) {
-        return res.status(401).json({
-          ok: false,
-          error: "Invalid webhook token",
-        });
+        return res.status(401).json({ ok: false, error: "Invalid webhook token" });
       }
     }
 
-    // ✅ daqui pra baixo: seu fluxo normal
     const email =
       body?.customer?.email ||
       body?.buyer?.email ||
@@ -165,10 +185,12 @@ export default async function handler(req, res) {
       body?.data?.email;
 
     if (!email) {
-      return res.status(400).json({ ok: false, error: "Missing customer email in payload" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "Missing customer email in payload" });
     }
 
-    const emailNorm = email.toLowerCase().trim();
+    const emailNorm = String(email).toLowerCase().trim();
 
     const event =
       body?.event ||
@@ -223,7 +245,8 @@ export default async function handler(req, res) {
     if (!prof) {
       return res.status(200).json({
         ok: true,
-        warning: "No profile found for this email. User must sign up in the app with same email.",
+        warning:
+          "No profile found for this email. User must sign up in the app with same email.",
       });
     }
 
@@ -235,7 +258,7 @@ export default async function handler(req, res) {
       email: emailNorm,
       subscription_status: isPaid ? "active" : "inactive",
       access_status: isPaid ? "active" : "inactive",
-      access_until: isPaid ? addDays(new Date(), 30) : null,
+      access_until: isPaid ? addDaysISO(new Date(), 30) : null,
       access_origin: "paid",
     };
 
@@ -251,6 +274,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, updated, norm });
   } catch (e) {
     console.error("[KIWIFY] error:", e);
-    return res.status(400).json({ ok: false, error: e?.message || "Webhook error" });
+    return res.status(500).json({ ok: false, error: e?.message || "Webhook error" });
   }
 }
