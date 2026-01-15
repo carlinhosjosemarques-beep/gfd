@@ -36,7 +36,8 @@ function readSignature(req) {
     (h["x-kiwify-signature"] ||
       h["x-webhook-signature"] ||
       h["x-signature"] ||
-      "").toString().trim();
+      "").toString()
+      .trim();
 
   return sigQuery || sigHeader || "";
 }
@@ -127,16 +128,10 @@ export default async function handler(req, res) {
       console.log("[KIWIFY] raw len:", raw.length);
     }
 
-    // 1) Se veio signature, valida via HMAC-SHA1 (precisa do secret)
-    if (receivedSig) {
-      if (!secretForSignature) {
-        return res.status(401).json({
-          ok: false,
-          error:
-            "Signature received but KIWIFY_WEBHOOK_SECRET is not set (required to validate signature).",
-        });
-      }
-
+    // ✅ Auth:
+    // - Se veio signature E temos secret => valida HMAC
+    // - Caso contrário => fallback para token fixo
+    if (receivedSig && secretForSignature) {
       const expectedSig = computeHmacSha1Hex(secretForSignature, raw);
 
       if (debug) {
@@ -148,20 +143,16 @@ export default async function handler(req, res) {
           ok: false,
           error: "Invalid signature",
           hint: debug
-            ? {
-                received: maskToken(receivedSig),
-                expected: maskToken(expectedSig),
-              }
+            ? { received: maskToken(receivedSig), expected: maskToken(expectedSig) }
             : undefined,
         });
       }
     } else {
-      // 2) Se NÃO veio signature, valida por token fixo
       if (!tokenExpected) {
         return res.status(401).json({
           ok: false,
           error:
-            "No signature received and KIWIFY_WEBHOOK_TOKEN is not set (configure at least one auth method).",
+            "No valid signature secret configured and KIWIFY_WEBHOOK_TOKEN is not set (configure at least one auth method).",
         });
       }
 
@@ -177,6 +168,7 @@ export default async function handler(req, res) {
       }
     }
 
+    // ✅ fluxo
     const email =
       body?.customer?.email ||
       body?.buyer?.email ||
