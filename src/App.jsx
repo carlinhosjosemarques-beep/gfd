@@ -64,9 +64,13 @@ export default function App() {
       warn: "#F97316",
       controlBg: dark ? "rgba(2,6,23,0.35)" : "rgba(255,255,255,0.9)",
       controlBg2: dark ? "rgba(2,6,23,0.55)" : "rgba(255,255,255,1)",
-      focusRing: dark ? "0 0 0 3px rgba(56,189,248,0.22)" : "0 0 0 3px rgba(37,99,235,0.18)",
+      focusRing: dark
+        ? "0 0 0 3px rgba(56,189,248,0.22)"
+        : "0 0 0 3px rgba(37,99,235,0.18)",
       tabActiveBg: dark ? "rgba(37,99,235,0.22)" : "rgba(37,99,235,0.10)",
-      tabActiveBorder: dark ? "rgba(96,165,250,0.55)" : "rgba(37,99,235,0.35)",
+      tabActiveBorder: dark
+        ? "rgba(96,165,250,0.55)"
+        : "rgba(37,99,235,0.35)",
       tabHoverBg: dark ? "rgba(148,163,184,0.10)" : "rgba(15,23,42,0.06)",
     };
   }, [theme]);
@@ -121,11 +125,9 @@ export default function App() {
     const notExpiredNew = !accessUntil || accessUntil > now;
     const notExpiredOld = !accessExpiresAt || accessExpiresAt > now;
 
-    // critérios possíveis
     const okByAccessStatus = accessStatus === "active" && notExpiredNew;
     const okByGranted = accessGranted === true && notExpiredOld;
 
-    // se você usa subscription_status, considere "active/paid"
     const okBySubscription =
       (subStatus === "active" || subStatus === "paid" || subStatus === "approved") &&
       (notExpiredNew || notExpiredOld);
@@ -157,14 +159,14 @@ export default function App() {
     }
 
     try {
-      // 1) tenta pegar tudo (novo + antigo). Se alguma coluna não existir, cai no catch.
+      // 1) tenta pegar tudo (novo + antigo).
       const colsAll =
         "id,email,created_at,updated_at,is_admin,access_status,access_until,subscription_status,access_granted,access_origin,access_expires_at";
       const data1 = await trySelect(colsAll);
       setProfile(data1);
     } catch (e1) {
       try {
-        // 2) fallback para o seu schema “print” atual (antigo)
+        // 2) fallback schema “antigo”
         const colsLegacy =
           "id,email,created_at,access_granted,access_origin,access_expires_at,subscription_status";
         const data2 = await trySelect(colsLegacy);
@@ -176,7 +178,12 @@ export default function App() {
           setProfile(data3);
         } catch (e3) {
           setProfile(undefined);
-          setProfileErr(e3?.message || e2?.message || e1?.message || "Não foi possível verificar seu acesso.");
+          setProfileErr(
+            e3?.message ||
+              e2?.message ||
+              e1?.message ||
+              "Não foi possível verificar seu acesso."
+          );
         }
       }
     } finally {
@@ -185,10 +192,14 @@ export default function App() {
   }
 
   useEffect(() => {
+    // ✅ evita loop: só tenta buscar quando user.id existir
     if (user && user !== null) fetchProfile(user);
+
+    // ✅ quando desloga, limpa tudo
     if (user === null) {
       setProfile(undefined);
       setProfileErr(null);
+      setCheckingProfile(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -199,7 +210,9 @@ export default function App() {
       <div style={styles.page}>
         <div style={{ ...styles.centerCard, textAlign: "center" }}>
           <div style={styles.spinner} />
-          <div style={{ marginTop: 12, color: "var(--muted)", fontWeight: 900 }}>Carregando…</div>
+          <div style={{ marginTop: 12, color: "var(--muted)", fontWeight: 900 }}>
+            Carregando…
+          </div>
         </div>
       </div>
     );
@@ -218,13 +231,26 @@ export default function App() {
     return (
       <div style={styles.page}>
         <div style={{ ...styles.centerCard }}>
-          <div style={{ fontWeight: 1000, fontSize: 16 }}>Não foi possível verificar seu acesso</div>
-          <div style={{ marginTop: 8, color: "var(--muted)", fontWeight: 900, lineHeight: 1.4 }}>
+          <div style={{ fontWeight: 1000, fontSize: 16 }}>
+            Não foi possível verificar seu acesso
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              color: "var(--muted)",
+              fontWeight: 900,
+              lineHeight: 1.4,
+            }}
+          >
             {profileErr}
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-            <button onClick={() => fetchProfile(user)} style={styles.primaryBtn} disabled={checkingProfile}>
+            <button
+              onClick={() => fetchProfile(user)}
+              style={styles.primaryBtn}
+              disabled={checkingProfile}
+            >
               {checkingProfile ? "Aguarde..." : "Tentar novamente"}
             </button>
 
@@ -237,19 +263,33 @@ export default function App() {
     );
   }
 
-  // ✅ Caso extremamente raro: profile ainda não existe (trigger não rodou)
+  // ✅ Caso raro: profile ainda não existe (trigger não rodou)
   if (profile === null) {
     return (
       <div style={styles.page}>
         <div style={{ ...styles.centerCard }}>
-          <div style={{ fontWeight: 1000, fontSize: 16 }}>Seu perfil ainda não foi criado</div>
-          <div style={{ marginTop: 8, color: "var(--muted)", fontWeight: 900, lineHeight: 1.4 }}>
-            Isso normalmente acontece quando o trigger de criação automática do perfil ainda não está configurado
-            no Supabase. Rode o SQL que eu te passei e depois clique em atualizar.
+          <div style={{ fontWeight: 1000, fontSize: 16 }}>
+            Seu perfil ainda não foi criado
+          </div>
+          <div
+            style={{
+              marginTop: 8,
+              color: "var(--muted)",
+              fontWeight: 900,
+              lineHeight: 1.4,
+            }}
+          >
+            Isso normalmente acontece quando o trigger de criação automática do perfil ainda
+            não está configurado no Supabase. Rode o SQL que eu te passei e depois clique
+            em atualizar.
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-            <button onClick={() => fetchProfile(user)} style={styles.primaryBtn} disabled={checkingProfile}>
+            <button
+              onClick={() => fetchProfile(user)}
+              style={styles.primaryBtn}
+              disabled={checkingProfile}
+            >
               {checkingProfile ? "Aguarde..." : "Atualizar"}
             </button>
 
@@ -307,7 +347,11 @@ export default function App() {
               {tokens.dark ? "🌙 Dark" : "☀️ Light"}
             </button>
 
-            <button onClick={() => supabase.auth.signOut()} style={styles.dangerBtn} title="Sair">
+            <button
+              onClick={() => supabase.auth.signOut()}
+              style={styles.dangerBtn}
+              title="Sair"
+            >
               Sair
             </button>
           </div>
@@ -343,6 +387,7 @@ export default function App() {
         {/* Conteúdo */}
         <main style={styles.content}>
           {tab === "dashboard" && <Dashboard canWrite={canWrite} />}
+          {/* ✅ AQUI está o ajuste principal pro “modo leitura”: */}
           {tab === "relatorios" && <Relatorios canWrite={canWrite} />}
           {tab === "metas" && <Metas canWrite={canWrite} />}
         </main>
@@ -356,7 +401,6 @@ export default function App() {
     </div>
   );
 }
-
 /* ================= UI helpers ================= */
 
 function tabStyle(active) {

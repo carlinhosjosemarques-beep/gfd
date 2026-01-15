@@ -1,10 +1,5 @@
-// ✅ AJUSTE PONTUAL: CANWRITE (ASSINATURA) NO RELATORIOS.JSX
-// - NÃO remove nada do que funciona
-// - Troca checagem antiga da tabela "assinaturas" por "profiles" (admin/promo/lifetime)
-// - Mantém layout e lógica
-
 // =========================
-// RELATORIOS.JSX — FINAL (MOBILE FRIENDLY)
+// RELATORIOS.JSX — PART 1/2
 // =========================
 
 import { useEffect, useMemo, useState } from "react";
@@ -120,7 +115,6 @@ const COLORS = [
   "#2563EB","#16A34A","#F97316","#A855F7","#EF4444",
   "#14B8A6","#EAB308","#0EA5E9","#F43F5E","#22C55E",
 ];
-
 const COLOR_RECEITAS = "#16A34A";
 const COLOR_DESPESAS = "#EF4444";
 const COLOR_SALDO = "#2563EB";
@@ -136,7 +130,7 @@ function buildCsv(rows) {
   };
   const lines = [
     headers.join(","),
-    ...rows.map(r => headers.map(h => escape(r[h])).join(","))
+    ...rows.map((r) => headers.map((h) => escape(r[h])).join(",")),
   ];
   return lines.join("\n");
 }
@@ -145,31 +139,31 @@ function badgeDelta(pct) {
   const n = Number(pct || 0);
   const up = n > 0;
   const down = n < 0;
-
   const bg = up
     ? "rgba(34,197,94,0.14)"
     : down
       ? "rgba(239,68,68,0.14)"
       : "rgba(148,163,184,0.14)";
-
   const fg = up ? "#16A34A" : down ? "#EF4444" : "var(--muted)";
   const arrow = up ? "▲" : down ? "▼" : "●";
   const txt = `${arrow} ${up ? "+" : ""}${n.toFixed(0)}%`;
 
   return (
-    <span style={{
-      background: bg,
-      color: fg,
-      padding: "3px 9px",
-      borderRadius: 999,
-      fontSize: 12,
-      fontWeight: 950,
-      border: "1px solid var(--border)",
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 6,
-      letterSpacing: -0.1,
-    }}>
+    <span
+      style={{
+        background: bg,
+        color: fg,
+        padding: "3px 9px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 950,
+        border: "1px solid var(--border)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        letterSpacing: -0.1,
+      }}
+    >
       {txt}
     </span>
   );
@@ -185,28 +179,27 @@ function periodLabel(mode, ano, mes, range) {
 }
 
 function groupSmallCategoriesIntoOthers(data, maxItems = 7, othersLabel = "Outros") {
-  const arr = [...(data || [])].filter(x => (Number(x.value) || 0) > 0);
+  const arr = [...(data || [])].filter((x) => (Number(x.value) || 0) > 0);
   if (arr.length <= maxItems) return arr;
-
   const top = arr.slice(0, maxItems - 1);
   const rest = arr.slice(maxItems - 1);
-
   const othersValue = rest.reduce((s, x) => s + (Number(x.value) || 0), 0);
   if (othersValue <= 0) return top;
-
   return [...top, { name: othersLabel, value: Math.round(othersValue * 100) / 100 }];
 }
 
 function CollapseSection({ title, subtitle, open, onToggle, children, rightSlot }) {
   return (
     <div style={{ marginTop: 12 }}>
-      <div style={{
-        ...styles.cardPad,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 10,
-      }}>
+      <div
+        style={{
+          ...styles.cardPad,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+        }}
+      >
         <button
           onClick={onToggle}
           style={styles.sectionHeaderBtn}
@@ -225,88 +218,40 @@ function CollapseSection({ title, subtitle, open, onToggle, children, rightSlot 
         ) : null}
       </div>
 
-      {open ? (
-        <div style={{ marginTop: 12 }}>
-          {children}
-        </div>
-      ) : null}
+      {open ? <div style={{ marginTop: 12 }}>{children}</div> : null}
     </div>
   );
-}
-
-/** ✅ Gate único de acesso (mesma ideia do Dashboard) */
-function isAccessActive(p) {
-  if (!p) return false;
-
-  const origin = String(p.access_origin || "").toLowerCase();
-  if (origin === "admin" || origin === "promo") return true;
-
-  const accessOk = String(p.access_status || "").toLowerCase() === "active";
-  const subOk = String(p.subscription_status || "").toLowerCase() === "active";
-
-  const untilOk = !p.access_until || new Date(p.access_until).getTime() >= Date.now();
-
-  return accessOk && subOk && untilOk;
 }
 
 /**
  * ✅ Relatórios integrado ao tema global do App.jsx
  * - Usa vars: --bg, --card, --text, --muted, --border, --shadowSoft, --controlBg, --controlBg2, --warn
+ *
+ * ✅ IMPORTANTÍSSIMO:
+ * - Agora recebe `canWrite` do App.jsx (prop).
+ * - Não faz mais consulta de profiles aqui dentro (isso causava “modo leitura” travado).
  */
-export default function Relatorios() {
+export default function Relatorios({ canWrite = false }) {
   const hoje = new Date();
   const isMobile = useIsMobile(720);
 
-  /* ================= AUTH ================= */
+  /* ================= AUTH (somente para user_id nas queries) ================= */
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
-
-  // ✅ CANWRITE/ASSINATURA (AGORA via PROFILES)
-  const [canWrite, setCanWrite] = useState(false);
-  const [planLoading, setPlanLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
       setAuthReady(true);
     });
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       setUser(s?.user ?? null);
       setAuthReady(true);
     });
+
     return () => sub.subscription.unsubscribe();
   }, []);
-
-  // ✅ Busca acesso/assinatura no PROFILES (admin/promo/lifetime)
-  useEffect(() => {
-    if (!user) {
-      setCanWrite(false);
-      return;
-    }
-
-    (async () => {
-      setPlanLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("access_origin, access_status, subscription_status, access_until")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (error) {
-          console.warn("Profiles: erro ao consultar. Mantendo bloqueado.", error);
-          setCanWrite(false);
-        } else {
-          setCanWrite(isAccessActive(data));
-        }
-      } catch (e) {
-        console.warn("Profiles: exceção. Mantendo bloqueado.", e);
-        setCanWrite(false);
-      } finally {
-        setPlanLoading(false);
-      }
-    })();
-  }, [user]);
 
   /* ================= PERÍODO (MODO) ================= */
   const [periodMode, setPeriodMode] = useState("mensal"); // mensal | 3m | 6m | anual | custom
@@ -340,7 +285,10 @@ export default function Relatorios() {
 
     const s = clampDateStr(dataInicio);
     const e = clampDateStr(dataFim);
-    return { start: s || ymd(new Date(anoRef, mesRef, 1)), end: e || ymd(new Date(anoRef, mesRef + 1, 1)) };
+    return {
+      start: s || ymd(new Date(anoRef, mesRef, 1)),
+      end: e || ymd(new Date(anoRef, mesRef + 1, 1)),
+    };
   }, [periodMode, anoRef, mesRef, dataInicio, dataFim]);
 
   const rangePrev = useMemo(() => {
@@ -348,16 +296,13 @@ export default function Relatorios() {
       const prev = addMonths(anoRef, mesRef, -1);
       return startEndMonth(prev.ano, prev.mes);
     }
-
     if (periodMode === "anual") {
       return startEndYear(anoRef - 1);
     }
-
     const dur = daysBetween(rangeAtual.start, rangeAtual.end);
     const endPrevDate = new Date(rangeAtual.start);
     const startPrevDate = new Date(rangeAtual.start);
     startPrevDate.setDate(startPrevDate.getDate() - dur);
-
     return { start: ymd(startPrevDate), end: ymd(endPrevDate) };
   }, [periodMode, anoRef, mesRef, rangeAtual.start, rangeAtual.end]);
 
@@ -367,22 +312,16 @@ export default function Relatorios() {
   );
 
   const subPeriodo = useMemo(() => {
-    const p = periodLabel(periodMode, (() => {
-      if (periodMode === "mensal") {
-        const prev = addMonths(anoRef, mesRef, -1);
-        return prev.ano;
-      }
-      if (periodMode === "anual") return anoRef - 1;
-      return anoRef;
-    })(), (() => {
-      if (periodMode === "mensal") {
-        const prev = addMonths(anoRef, mesRef, -1);
-        return prev.mes;
-      }
-      return mesRef;
-    })(), rangePrev);
+    const anoPrev =
+      periodMode === "mensal" ? addMonths(anoRef, mesRef, -1).ano :
+      periodMode === "anual" ? (anoRef - 1) :
+      anoRef;
 
-    return p;
+    const mesPrev =
+      periodMode === "mensal" ? addMonths(anoRef, mesRef, -1).mes :
+      mesRef;
+
+    return periodLabel(periodMode, anoPrev, mesPrev, rangePrev);
   }, [periodMode, anoRef, mesRef, rangePrev]);
 
   /* ================= FILTROS ================= */
@@ -390,8 +329,6 @@ export default function Relatorios() {
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas"); // todas | nome
   const [contaFiltro, setContaFiltro] = useState("todas"); // todas | sem | uuid
   const [incluirPendentes, setIncluirPendentes] = useState(true);
-
-  // ✅ Toggle separado: comparar com período anterior
   const [compararAnterior, setCompararAnterior] = useState(true);
 
   /* ================= UI (recolher seções) ================= */
@@ -441,13 +378,14 @@ export default function Relatorios() {
       return [];
     }
 
-    const list = (data || []);
-    if (contaFiltro === "sem") return list.filter(l => !l.conta_id);
+    const list = data || [];
+    if (contaFiltro === "sem") return list.filter((l) => !l.conta_id);
     return list;
   }
 
   useEffect(() => {
     if (!user) return;
+
     (async () => {
       setLoading(true);
       await carregarContas();
@@ -455,19 +393,20 @@ export default function Relatorios() {
       setLancamentos(atual);
       setLoading(false);
     })();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, rangeAtual.start, rangeAtual.end, tipoFiltro, categoriaFiltro, contaFiltro, incluirPendentes]);
 
   /* ================= LISTAS AUX ================= */
   const categoriasDisponiveis = useMemo(() => {
     const set = new Set();
-    (lancamentos || []).forEach(l => set.add(l.categoria || "Outros"));
+    (lancamentos || []).forEach((l) => set.add(l.categoria || "Outros"));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [lancamentos]);
 
   const contaNome = (id) => {
     if (!id) return "(Sem conta)";
-    return contas.find(c => c.id === id)?.nome || "Conta";
+    return contas.find((c) => c.id === id)?.nome || "Conta";
   };
 
   /* ================= TOTAIS ================= */
@@ -507,7 +446,6 @@ export default function Relatorios() {
   useEffect(() => {
     if (!user) return;
 
-    // ✅ Se desligar comparação, zera e não carrega
     if (!compararAnterior) {
       setPrevResumo({ receitas: 0, despesas: 0, saldo: 0 });
       return;
@@ -522,8 +460,10 @@ export default function Relatorios() {
         if (l.tipo === "receita") r += (l.pago ? v : 0);
         if (l.tipo === "despesa") d += (l.pago ? v : 0);
       }
+
       setPrevResumo({ receitas: r, despesas: d, saldo: r - d });
     })();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, compararAnterior, rangePrev.start, rangePrev.end, tipoFiltro, categoriaFiltro, contaFiltro, incluirPendentes]);
 
@@ -560,10 +500,7 @@ export default function Relatorios() {
       .sort((a, b) => b.value - a.value);
   }, [lancamentos, incluirPendentes]);
 
-  // ✅ Top categorias com “Outros”
-  const topCategorias = useMemo(() => {
-    return groupSmallCategoriesIntoOthers(despesasPorCategoria, 7, "Outros");
-  }, [despesasPorCategoria]);
+  const topCategorias = useMemo(() => groupSmallCategoriesIntoOthers(despesasPorCategoria, 7, "Outros"), [despesasPorCategoria]);
 
   const totalDespesasCategorias = useMemo(
     () => despesasPorCategoria.reduce((s, x) => s + (Number(x.value) || 0), 0),
@@ -575,12 +512,8 @@ export default function Relatorios() {
     [receitasPorCategoria]
   );
 
-  const diasPeriodo = useMemo(
-    () => daysBetween(rangeAtual.start, rangeAtual.end),
-    [rangeAtual.start, rangeAtual.end]
-  );
+  const diasPeriodo = useMemo(() => daysBetween(rangeAtual.start, rangeAtual.end), [rangeAtual.start, rangeAtual.end]);
 
-  // ✅ Empilhar por mês quando período for 3/6/anual ou custom grande
   const granularity = useMemo(() => {
     if (periodMode === "3m" || periodMode === "6m" || periodMode === "anual") return "month";
     if (periodMode === "custom") return diasPeriodo > 62 ? "month" : "day";
@@ -589,8 +522,8 @@ export default function Relatorios() {
 
   const porDia = useMemo(() => {
     if (granularity !== "day") return [];
-
     const map = new Map();
+
     for (const l of lancamentos || []) {
       if (!incluirPendentes && !l.pago) continue;
       const dia = l.data;
@@ -603,7 +536,7 @@ export default function Relatorios() {
 
     return Array.from(map.values())
       .sort((a, b) => String(a.key).localeCompare(String(b.key)))
-      .map(x => ({
+      .map((x) => ({
         ...x,
         label: new Date(x.key).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
         receitas: Math.round(x.receitas * 100) / 100,
@@ -613,8 +546,8 @@ export default function Relatorios() {
 
   const porMes = useMemo(() => {
     if (granularity !== "month") return [];
-
     const map = new Map(); // YYYY-MM -> {receitas, despesas}
+
     for (const l of lancamentos || []) {
       if (!incluirPendentes && !l.pago) continue;
       const d = new Date(l.data);
@@ -628,7 +561,7 @@ export default function Relatorios() {
 
     return Array.from(map.values())
       .sort((a, b) => String(a.key).localeCompare(String(b.key)))
-      .map(x => {
+      .map((x) => {
         const [yy, mm] = x.key.split("-").map(Number);
         return {
           ...x,
@@ -643,16 +576,14 @@ export default function Relatorios() {
 
   const saldoAcumulado = useMemo(() => {
     let acc = 0;
-    return (serieMov || []).map(x => {
+    return (serieMov || []).map((x) => {
       acc += (Number(x.receitas) || 0) - (Number(x.despesas) || 0);
       return { label: x.label, saldo: Math.round(acc * 100) / 100 };
     });
   }, [serieMov]);
 
-  // Melhor/pior dia (apenas quando for dia)
   const bestWorstDay = useMemo(() => {
     if (granularity !== "day") return { best: null, worst: null };
-
     let best = null;
     let worst = null;
 
@@ -662,6 +593,7 @@ export default function Relatorios() {
       if (!best || item.saldoDia > best.saldoDia) best = item;
       if (!worst || item.saldoDia < worst.saldoDia) worst = item;
     }
+
     return { best, worst };
   }, [porDia, granularity]);
 
@@ -671,10 +603,10 @@ export default function Relatorios() {
     const desp = totais.despesasTotal;
     const saldo = rec - desp;
 
-    const topCat = (despesasPorCategoria?.[0]?.name) || null;
-    const topCatVal = (despesasPorCategoria?.[0]?.value) || 0;
+    const topCat = despesasPorCategoria?.[0]?.name || null;
+    const topCatVal = despesasPorCategoria?.[0]?.value || 0;
 
-    const taxa = rec > 0 ? (saldo / rec) : 0;
+    const taxa = rec > 0 ? saldo / rec : 0;
 
     let msg = "";
     if ((lancamentos || []).length === 0) {
@@ -682,7 +614,7 @@ export default function Relatorios() {
     } else if (saldo < 0) {
       msg = `Seu saldo no período está negativo. A maior pressão veio de ${topCat ? `"${topCat}"` : "despesas"} (${money(topCatVal)}).`;
     } else if (saldo === 0) {
-      msg = `Você fechou o período no zero a zero.`;
+      msg = "Você fechou o período no zero a zero.";
     } else {
       msg = `Saldo positivo no período. Você reteve ${(taxa * 100).toFixed(0)}% das receitas.`;
       if (topCat) msg += ` Principal gasto: "${topCat}" (${money(topCatVal)}).`;
@@ -693,10 +625,10 @@ export default function Relatorios() {
 
   /* ================= EXPORTAR CSV ================= */
   function exportarCsv() {
-    // ✅ BLOQUEIO POR ASSINATURA (canWrite)
+    // ✅ Regra: exportação pode ser “paywall” (modo leitura não exporta)
     if (!canWrite) return;
 
-    const rows = (lancamentos || []).map(l => ({
+    const rows = (lancamentos || []).map((l) => ({
       data: l.data,
       tipo: l.tipo,
       categoria: l.categoria,
@@ -709,7 +641,6 @@ export default function Relatorios() {
     const csv = buildCsv(rows);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-
     const nomeArquivo = `gfd_relatorio_${periodMode}_${rangeAtual.start}_a_${rangeAtual.end}.csv`;
 
     const a = document.createElement("a");
@@ -731,11 +662,14 @@ export default function Relatorios() {
     return (
       <div style={styles.tooltip}>
         <div style={{ fontWeight: 950, marginBottom: 6 }}>{nome}</div>
+
         <div style={styles.ttRow}>
           <span style={{ opacity: 0.8 }}>{prefix}</span>
           <b>{money(valor)}</b>
         </div>
+
         <div style={styles.hr} />
+
         <div style={styles.ttRow}>
           <span style={{ opacity: 0.8 }}>Total (filtro)</span>
           <b>{money(totalGeral)}</b>
@@ -746,8 +680,9 @@ export default function Relatorios() {
 
   function TooltipMov({ active, payload, label, totalReceitas, totalDespesas }) {
     if (!active || !payload || payload.length === 0) return null;
-    const rec = payload.find(p => p.dataKey === "receitas")?.value ?? 0;
-    const desp = payload.find(p => p.dataKey === "despesas")?.value ?? 0;
+
+    const rec = payload.find((p) => p.dataKey === "receitas")?.value ?? 0;
+    const desp = payload.find((p) => p.dataKey === "despesas")?.value ?? 0;
 
     return (
       <div style={styles.tooltip}>
@@ -779,8 +714,12 @@ export default function Relatorios() {
   }
 
   /* ================= UI ================= */
-  if (!authReady) return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Carregando…</p>;
-  if (!user) return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Faça login novamente.</p>;
+  if (!authReady) {
+    return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Carregando…</p>;
+  }
+  if (!user) {
+    return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Faça login novamente.</p>;
+  }
 
   const presets = [
     { key: "todos", label: "Tudo", apply: () => setTipoFiltro("todos") },
@@ -799,13 +738,9 @@ export default function Relatorios() {
 
   const saldoDoi = totais.saldoTotal < 0;
 
-  // ✅ UI: se não assinado, botão export fica bloqueado
-  const exportDisabled = planLoading || !canWrite;
-  const exportTitle = planLoading
-    ? "Verificando assinatura…"
-    : !canWrite
-      ? "Apenas assinantes podem exportar CSV."
-      : "Exportar CSV";
+  // ✅ botão export bloqueado no modo leitura
+  const exportDisabled = !canWrite;
+  const exportTitle = !canWrite ? "Apenas assinantes podem exportar CSV." : "Exportar CSV";
 
   return (
     <div style={styles.page}>
@@ -813,30 +748,32 @@ export default function Relatorios() {
         <div style={styles.header}>
           <div style={{ minWidth: isMobile ? 0 : 260 }}>
             <h2 style={{ margin: 0, letterSpacing: -0.3 }}>Relatórios — GFD</h2>
+
             <p style={{ marginTop: 6, color: "var(--muted)" }}>
               <b>{tituloPeriodo}</b>{" "}
               {compararAnterior ? (
-                <span style={{ marginLeft: 8, opacity: 0.75 }}>
-                  (vs {subPeriodo})
-                </span>
+                <span style={{ marginLeft: 8, opacity: 0.75 }}>(vs {subPeriodo})</span>
               ) : null}
             </p>
 
-            {/* ✅ Aviso discreto de assinatura */}
-            {!planLoading && !canWrite ? (
-              <div style={{
-                marginTop: 8,
-                display: "inline-flex",
-                gap: 8,
-                alignItems: "center",
-                padding: "8px 10px",
-                borderRadius: 14,
-                border: "1px solid rgba(234,179,8,.35)",
-                background: "rgba(234,179,8,.10)",
-                color: "var(--text)",
-                fontWeight: 950,
-                fontSize: 12,
-              }}>
+            {/* ✅ aviso discreto de paywall (sem travar o uso) */}
+            {!canWrite ? (
+              <div
+                style={{
+                  marginTop: 8,
+                  display: "inline-flex",
+                  gap: 8,
+                  alignItems: "center",
+                  padding: "8px 10px",
+                  borderRadius: 14,
+                  border: "1px solid rgba(234,179,8,.35)",
+                  background: "rgba(234,179,8,.10)",
+                  color: "var(--text)",
+                  fontWeight: 950,
+                  fontSize: 12,
+                }}
+                title="Modo leitura: exportação bloqueada"
+              >
                 🔒 Exportação disponível apenas para assinantes.
               </div>
             ) : null}
@@ -860,7 +797,8 @@ export default function Relatorios() {
 
         {/* ====== FILTROS / PERÍODO ====== */}
         <div style={styles.filters}>
-          {labelSelect("Período", (
+          {labelSelect(
+            "Período",
             <select value={periodMode} onChange={(e) => setPeriodMode(e.target.value)} style={styles.select}>
               <option value="mensal">Mensal</option>
               <option value="3m">Últimos 3 meses</option>
@@ -868,66 +806,95 @@ export default function Relatorios() {
               <option value="anual">Anual</option>
               <option value="custom">Personalizado</option>
             </select>
-          ))}
+          )}
 
           {periodMode !== "custom" ? (
             <>
-              {labelSelect(periodMode === "anual" ? "Ano" : "Mês final", (
-                <select value={mesRef} onChange={(e) => setMesRef(Number(e.target.value))} style={styles.select} disabled={periodMode === "anual"}>
-                  {meses.map((m, i) => <option key={i} value={i}>{m}</option>)}
+              {labelSelect(
+                periodMode === "anual" ? "Ano" : "Mês final",
+                <select
+                  value={mesRef}
+                  onChange={(e) => setMesRef(Number(e.target.value))}
+                  style={styles.select}
+                  disabled={periodMode === "anual"}
+                  title={periodMode === "anual" ? "No modo Anual o mês não se aplica" : "Selecione o mês final"}
+                >
+                  {meses.map((m, i) => (
+                    <option key={i} value={i}>
+                      {m}
+                    </option>
+                  ))}
                 </select>
-              ))}
+              )}
 
-              {labelSelect("Ano", (
+              {labelSelect(
+                "Ano",
                 <select value={anoRef} onChange={(e) => setAnoRef(Number(e.target.value))} style={styles.select}>
-                  {[2023, 2024, 2025, 2026, 2027, 2028].map(a => <option key={a} value={a}>{a}</option>)}
+                  {[2023, 2024, 2025, 2026, 2027, 2028].map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
                 </select>
-              ))}
+              )}
             </>
           ) : (
             <>
-              {labelSelect("Início (YYYY-MM-DD)", (
+              {labelSelect(
+                "Início (YYYY-MM-DD)",
                 <input
                   value={dataInicio}
                   onChange={(e) => setDataInicio(e.target.value)}
                   placeholder="2026-01-01"
                   style={styles.input}
                 />
-              ))}
+              )}
 
-              {labelSelect("Fim exclusivo (YYYY-MM-DD)", (
+              {labelSelect(
+                "Fim exclusivo (YYYY-MM-DD)",
                 <input
                   value={dataFim}
                   onChange={(e) => setDataFim(e.target.value)}
                   placeholder="2026-02-01"
                   style={styles.input}
                 />
-              ))}
+              )}
             </>
           )}
 
-          {labelSelect("Conta", (
+          {labelSelect(
+            "Conta",
             <select value={contaFiltro} onChange={(e) => setContaFiltro(e.target.value)} style={styles.select}>
               <option value="todas">Todas</option>
               <option value="sem">Sem conta</option>
-              {contas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              {contas.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
             </select>
-          ))}
+          )}
 
-          {labelSelect("Tipo", (
+          {labelSelect(
+            "Tipo",
             <select value={tipoFiltro} onChange={(e) => setTipoFiltro(e.target.value)} style={styles.select}>
               <option value="todos">Todos</option>
               <option value="receita">Receitas</option>
               <option value="despesa">Despesas</option>
             </select>
-          ))}
+          )}
 
-          {labelSelect("Categoria", (
+          {labelSelect(
+            "Categoria",
             <select value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)} style={styles.select}>
               <option value="todas">Todas</option>
-              {categoriasDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
+              {categoriasDisponiveis.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
             </select>
-          ))}
+          )}
 
           <label style={styles.checkLabel}>
             <input
@@ -952,13 +919,8 @@ export default function Relatorios() {
           </button>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {presets.map(p => (
-              <button
-                key={p.key}
-                onClick={p.apply}
-                style={styles.presetBtn}
-                title="Preset rápido"
-              >
+            {presets.map((p) => (
+              <button key={p.key} onClick={p.apply} style={styles.presetBtn} title="Preset rápido">
                 {p.label}
               </button>
             ))}
@@ -971,7 +933,9 @@ export default function Relatorios() {
         </div>
 
         {loading && (
-          <p style={{ marginTop: 10, color: "var(--muted)", fontWeight: 900 }}>Carregando dados…</p>
+          <p style={{ marginTop: 10, color: "var(--muted)", fontWeight: 900 }}>
+            Carregando dados…
+          </p>
         )}
 
         {/* ====== CARDS ====== */}
@@ -979,44 +943,58 @@ export default function Relatorios() {
           <div style={styles.card}>
             <div style={styles.cardLabel}>Receitas (pagas)</div>
             <div style={styles.cardValue}>{money(totais.receitas)}</div>
+
             {compararAnterior ? (
               <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 {badgeDelta(cmpReceitas)}
                 <span style={styles.cardMini}>vs período anterior</span>
               </div>
             ) : null}
-            {incluirPendentes && totais.receitasPend > 0 && (
+
+            {incluirPendentes && totais.receitasPend > 0 ? (
               <div style={styles.cardHint}>Pendentes: {money(totais.receitasPend)}</div>
-            )}
+            ) : null}
           </div>
 
           <div style={styles.card}>
             <div style={styles.cardLabel}>Despesas (pagas)</div>
             <div style={styles.cardValue}>{money(totais.despesas)}</div>
+
             {compararAnterior ? (
               <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 {badgeDelta(cmpDespesas)}
                 <span style={styles.cardMini}>vs período anterior</span>
               </div>
             ) : null}
-            {incluirPendentes && totais.despesasPend > 0 && (
+
+            {incluirPendentes && totais.despesasPend > 0 ? (
               <div style={styles.cardHint}>Pendentes: {money(totais.despesasPend)}</div>
-            )}
+            ) : null}
           </div>
 
-          <div style={{ ...styles.card, borderColor: saldoDoi ? "rgba(239,68,68,.35)" : "var(--border)", background: saldoDoi ? "rgba(239,68,68,.06)" : "var(--card)" }}>
+          <div
+            style={{
+              ...styles.card,
+              borderColor: saldoDoi ? "rgba(239,68,68,.35)" : "var(--border)",
+              background: saldoDoi ? "rgba(239,68,68,.06)" : "var(--card)",
+            }}
+          >
             <div style={styles.cardLabel}>Saldo (considerando filtros)</div>
             <div style={{ ...styles.cardValue, color: saldoDoi ? "#EF4444" : "var(--text)" }}>
               {money(totais.saldoTotal)}
             </div>
+
             {compararAnterior ? (
               <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 {badgeDelta(cmpSaldo)}
                 <span style={styles.cardMini}>vs período anterior</span>
               </div>
             ) : null}
+
             <div style={{ marginTop: 10, fontSize: 13, fontWeight: 900, color: saldoDoi ? "#EF4444" : "var(--muted)" }}>
-              {saldoDoi ? "⚠️ Atenção: você gastou mais do que recebeu no período." : "✅ Bom: saldo positivo no período."}
+              {saldoDoi
+                ? "⚠️ Atenção: você gastou mais do que recebeu no período."
+                : "✅ Bom: saldo positivo no período."}
             </div>
           </div>
         </div>
@@ -1024,17 +1002,14 @@ export default function Relatorios() {
         {/* ====== INSIGHT ====== */}
         <div style={{ ...styles.cardPad, marginTop: 12 }}>
           <div style={styles.sectionTitle}>Insight automático</div>
-          <div style={{ color: "var(--muted)", fontWeight: 900, lineHeight: 1.5 }}>
-            {insight.msg}
-          </div>
+          <div style={{ color: "var(--muted)", fontWeight: 900, lineHeight: 1.5 }}>{insight.msg}</div>
         </div>
 
         {/* ====== GRADE GRÁFICOS ====== */}
         <div style={styles.grid}>
           <div style={styles.cardPad}>
             <div style={styles.sectionTitle}>
-              Gastos por categoria{" "}
-              <span style={styles.sectionMuted}>• Total: {money(totalDespesasCategorias)}</span>
+              Gastos por categoria <span style={styles.sectionMuted}>• Total: {money(totalDespesasCategorias)}</span>
             </div>
 
             {despesasPorCategoria.length === 0 ? (
@@ -1055,6 +1030,7 @@ export default function Relatorios() {
                         <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
                       ))}
                     </Pie>
+
                     <Tooltip
                       content={({ active, payload, label }) => (
                         <TooltipCategoria
@@ -1066,7 +1042,14 @@ export default function Relatorios() {
                         />
                       )}
                     />
-                    <Legend wrapperStyle={{ color: "var(--text)", fontWeight: 800, fontSize: isMobile ? 11 : 12 }} />
+
+                    <Legend
+                      wrapperStyle={{
+                        color: "var(--text)",
+                        fontWeight: 800,
+                        fontSize: isMobile ? 11 : 12,
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -1075,8 +1058,7 @@ export default function Relatorios() {
 
           <div style={styles.cardPad}>
             <div style={styles.sectionTitle}>
-              Recebido por categoria{" "}
-              <span style={styles.sectionMuted}>• Total: {money(totalReceitasCategorias)}</span>
+              Recebido por categoria <span style={styles.sectionMuted}>• Total: {money(totalReceitasCategorias)}</span>
             </div>
 
             {receitasPorCategoria.length === 0 ? (
@@ -1112,7 +1094,7 @@ export default function Relatorios() {
                         />
                       )}
                     />
-                    <Bar dataKey="value" name="Receitas" fill={COLOR_RECEITAS} radius={[10,10,0,0]} />
+                    <Bar dataKey="value" name="Receitas" fill={COLOR_RECEITAS} radius={[10, 10, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1121,8 +1103,7 @@ export default function Relatorios() {
 
           <div style={styles.cardPad}>
             <div style={styles.sectionTitle}>
-              Top categorias (despesas){" "}
-              <span style={styles.sectionMuted}>• Total: {money(totalDespesasCategorias)}</span>
+              Top categorias (despesas) <span style={styles.sectionMuted}>• Total: {money(totalDespesasCategorias)}</span>
             </div>
 
             {topCategorias.length === 0 ? (
@@ -1156,7 +1137,7 @@ export default function Relatorios() {
                         />
                       )}
                     />
-                    <Bar dataKey="value" name="Despesas" radius={[0,10,10,0]}>
+                    <Bar dataKey="value" name="Despesas" radius={[0, 10, 10, 0]}>
                       {topCategorias.map((_, idx) => (
                         <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
                       ))}
@@ -1209,14 +1190,19 @@ export default function Relatorios() {
                         />
                       )}
                     />
-                    <Legend wrapperStyle={{ color: "var(--text)", fontWeight: 800, fontSize: isMobile ? 11 : 12 }} />
-                    <Bar dataKey="receitas" name="Receitas" fill={COLOR_RECEITAS} radius={[10,10,0,0]} />
-                    <Bar dataKey="despesas" name="Despesas" fill={COLOR_DESPESAS} radius={[10,10,0,0]} />
+                    <Legend
+                      wrapperStyle={{
+                        color: "var(--text)",
+                        fontWeight: 800,
+                        fontSize: isMobile ? 11 : 12,
+                      }}
+                    />
+                    <Bar dataKey="receitas" name="Receitas" fill={COLOR_RECEITAS} radius={[10, 10, 0, 0]} />
+                    <Bar dataKey="despesas" name="Despesas" fill={COLOR_DESPESAS} radius={[10, 10, 0, 0]} />
 
                     {granularity === "day" && bestWorstDay?.best ? (
                       <ReferenceLine x={bestWorstDay.best.label} stroke="rgba(34,197,94,0.6)" strokeDasharray="4 4" />
                     ) : null}
-
                     {granularity === "day" && bestWorstDay?.worst ? (
                       <ReferenceLine x={bestWorstDay.worst.label} stroke="rgba(239,68,68,0.6)" strokeDasharray="4 4" />
                     ) : null}
@@ -1227,12 +1213,15 @@ export default function Relatorios() {
                   <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
                     {bestWorstDay.best ? (
                       <div style={styles.miniInfoOk}>
-                        ✅ Melhor dia: <b>{bestWorstDay.best.label}</b> • saldo do dia: <b>{money(bestWorstDay.best.saldoDia)}</b>
+                        ✅ Melhor dia: <b>{bestWorstDay.best.label}</b> • saldo do dia:{" "}
+                        <b>{money(bestWorstDay.best.saldoDia)}</b>
                       </div>
                     ) : null}
+
                     {bestWorstDay.worst ? (
                       <div style={styles.miniInfoBad}>
-                        ⚠️ Pior dia: <b>{bestWorstDay.worst.label}</b> • saldo do dia: <b>{money(bestWorstDay.worst.saldoDia)}</b>
+                        ⚠️ Pior dia: <b>{bestWorstDay.worst.label}</b> • saldo do dia:{" "}
+                        <b>{money(bestWorstDay.worst.saldoDia)}</b>
                       </div>
                     ) : null}
                   </div>
@@ -1256,7 +1245,11 @@ export default function Relatorios() {
                 <ResponsiveContainer>
                   <LineChart data={saldoAcumulado}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
-                    <XAxis dataKey="label" tick={{ fontSize: isMobile ? 11 : 12 }} stroke="rgba(148,163,184,0.75)" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: isMobile ? 11 : 12 }}
+                      stroke="rgba(148,163,184,0.75)"
+                    />
                     <YAxis
                       width={isMobile ? 46 : 70}
                       tick={{ fontSize: isMobile ? 11 : 12 }}
@@ -1285,7 +1278,7 @@ export default function Relatorios() {
           title="Lançamentos (agrupados por dia)"
           subtitle={`${(lancamentos || []).length} item(ns) no período`}
           open={uiShowLancamentos}
-          onToggle={() => setUiShowLancamentos(v => !v)}
+          onToggle={() => setUiShowLancamentos((v) => !v)}
           rightSlot={
             <>
               <button onClick={() => setUiShowLancamentos(true)} style={styles.secondaryBtn} title="Expandir lista">
@@ -1301,69 +1294,82 @@ export default function Relatorios() {
             <EmptyState onClear={limparFiltros} />
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
-              {groupByDay(lancamentos).slice(0, 10).map(group => (
-                <div key={group.dia} style={{ ...styles.dayGroup }}>
-                  <div style={styles.dayHeader}>
-                    <div style={{ fontWeight: 950 }}>
-                      {new Date(group.dia).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
-                    </div>
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", color: "var(--muted)", fontWeight: 900 }}>
-                      <span>Receitas: <b style={{ color: COLOR_RECEITAS }}>{money(group.receitas)}</b></span>
-                      <span>Despesas: <b style={{ color: COLOR_DESPESAS }}>{money(group.despesas)}</b></span>
-                      <span>Saldo: <b style={{ color: (group.receitas - group.despesas) < 0 ? COLOR_DESPESAS : "var(--text)" }}>{money(group.receitas - group.despesas)}</b></span>
-                    </div>
-                  </div>
+              {groupByDay(lancamentos)
+                .slice(0, 10)
+                .map((group) => (
+                  <div key={group.dia} style={{ ...styles.dayGroup }}>
+                    <div style={styles.dayHeader}>
+                      <div style={{ fontWeight: 950 }}>
+                        {new Date(group.dia).toLocaleDateString("pt-BR", {
+                          weekday: "short",
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })}
+                      </div>
 
-                  <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-                    {group.items.slice(0, 12).map(l => (
-                      <div
-                        key={l.id}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 12,
-                          borderBottom: "1px solid var(--border)",
-                          paddingBottom: 10,
-                          flexWrap: "wrap",
-                          alignItems: "center",
-                        }}
-                      >
-                        <div style={{ minWidth: 240 }}>
-                          <div style={{ fontWeight: 950, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                            <span style={{
-                              ...styles.pill,
-                              background: l.tipo === "receita" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
-                              color: l.tipo === "receita" ? COLOR_RECEITAS : COLOR_DESPESAS,
-                            }}>
-                              {l.tipo === "receita" ? "⬆ Receita" : "⬇ Despesa"}
-                            </span>
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", color: "var(--muted)", fontWeight: 900 }}>
+                        <span>
+                          Receitas: <b style={{ color: COLOR_RECEITAS }}>{money(group.receitas)}</b>
+                        </span>
+                        <span>
+                          Despesas: <b style={{ color: COLOR_DESPESAS }}>{money(group.despesas)}</b>
+                        </span>
+                        <span>
+                          Saldo:{" "}
+                          <b style={{ color: (group.receitas - group.despesas) < 0 ? COLOR_DESPESAS : "var(--text)" }}>
+                            {money(group.receitas - group.despesas)}
+                          </b>
+                        </span>
+                      </div>
+                    </div>
 
-                            {!l.pago && (
-                              <span style={{ color: "var(--warn)", fontWeight: 950 }}>
-                                (pendente)
+                    <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                      {group.items.slice(0, 12).map((l) => (
+                        <div
+                          key={l.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            borderBottom: "1px solid var(--border)",
+                            paddingBottom: 10,
+                            flexWrap: "wrap",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div style={{ minWidth: 240 }}>
+                            <div style={{ fontWeight: 950, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <span
+                                style={{
+                                  ...styles.pill,
+                                  background: l.tipo === "receita" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+                                  color: l.tipo === "receita" ? COLOR_RECEITAS : COLOR_DESPESAS,
+                                }}
+                              >
+                                {l.tipo === "receita" ? "⬆ Receita" : "⬇ Despesa"}
                               </span>
-                            )}
+
+                              {!l.pago ? <span style={{ color: "var(--warn)", fontWeight: 950 }}>(pendente)</span> : null}
+                            </div>
+
+                            <div style={{ color: "var(--muted)", marginTop: 4, fontWeight: 850 }}>
+                              {l.descricao || "(sem descrição)"} • {l.categoria || "Outros"} • {contaNome(l.conta_id)}
+                            </div>
                           </div>
 
-                          <div style={{ color: "var(--muted)", marginTop: 4, fontWeight: 850 }}>
-                            {l.descricao || "(sem descrição)"} • {l.categoria || "Outros"} • {contaNome(l.conta_id)}
-                          </div>
+                          <div style={{ fontWeight: 950, fontSize: 16 }}>{money(l.valor)}</div>
                         </div>
+                      ))}
 
-                        <div style={{ fontWeight: 950, fontSize: 16 }}>
-                          {money(l.valor)}
+                      {group.items.length > 12 ? (
+                        <div style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
+                          + {group.items.length - 12} item(ns) nesse dia (filtrados)
                         </div>
-                      </div>
-                    ))}
-
-                    {group.items.length > 12 ? (
-                      <div style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
-                        + {group.items.length - 12} item(ns) nesse dia (filtrados)
-                      </div>
-                    ) : null}
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
               <div style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
                 Mostrando até 10 dias (mais recentes no topo). CSV exporta tudo do período.
@@ -1377,20 +1383,25 @@ export default function Relatorios() {
 }
 
 /* ===== Helpers UI ===== */
+
 function EmptyState({ onClear }) {
   return (
-    <div style={{
-      border: "1px dashed var(--border)",
-      borderRadius: 16,
-      padding: 14,
-      background: "rgba(148,163,184,0.06)",
-    }}>
+    <div
+      style={{
+        border: "1px dashed var(--border)",
+        borderRadius: 16,
+        padding: 14,
+        background: "rgba(148,163,184,0.06)",
+      }}
+    >
       <div style={{ fontWeight: 950 }}>Sem resultados para o período/filtro atual.</div>
       <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900 }}>
         Dica: tente incluir pendentes, mudar o período ou limpar filtros.
       </div>
       <div style={{ marginTop: 10 }}>
-        <button onClick={onClear} style={styles.secondaryBtn}>🧹 Limpar filtros</button>
+        <button onClick={onClear} style={styles.secondaryBtn}>
+          🧹 Limpar filtros
+        </button>
       </div>
     </div>
   );
@@ -1398,19 +1409,24 @@ function EmptyState({ onClear }) {
 
 function groupByDay(list) {
   const map = new Map();
+
   for (const l of [...(list || [])].sort((a, b) => String(b.data).localeCompare(String(a.data)))) {
     const dia = l.data;
     if (!map.has(dia)) map.set(dia, { dia, items: [], receitas: 0, despesas: 0 });
+
     const g = map.get(dia);
     g.items.push(l);
+
     const v = Number(l.valor) || 0;
     if (l.tipo === "receita") g.receitas += v;
     if (l.tipo === "despesa") g.despesas += v;
   }
+
   return Array.from(map.values());
 }
 
 /* ===== Styles ===== */
+
 const styles = {
   page: {
     width: "100%",
@@ -1422,7 +1438,8 @@ const styles = {
     width: "100%",
     boxSizing: "border-box",
     margin: "0 auto",
-    padding: "max(14px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 14px max(12px, env(safe-area-inset-left))",
+    padding:
+      "max(14px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 14px max(12px, env(safe-area-inset-left))",
     overflow: "hidden",
   },
 
@@ -1515,7 +1532,7 @@ const styles = {
     marginTop: 14,
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 12
+    gap: 12,
   },
 
   card: {
@@ -1570,7 +1587,7 @@ const styles = {
     marginTop: 14,
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: 12
+    gap: 12,
   },
 
   sectionTitle: {

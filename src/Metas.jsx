@@ -1,7 +1,3 @@
-/* =========================
-   METAS.JSX — PARTE 1/2
-   ========================= */
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 
@@ -17,11 +13,6 @@ function ymd(d) {
   return `${y}-${m}-${day}`;
 }
 
-/* =========================================================
-   ✅ CORREÇÃO DEFINITIVA DE TIMEZONE (sem “um dia a menos”)
-   - Evita new Date("YYYY-MM-DD") (UTC)
-   - Sempre parse como data LOCAL: new Date(y, m-1, d)
-========================================================= */
 function parseYmdLocal(ymdStr) {
   if (!ymdStr) return null;
   const s = String(ymdStr).trim();
@@ -31,18 +22,15 @@ function parseYmdLocal(ymdStr) {
   const mo = Number(m[2]);
   const d = Number(m[3]);
   if (!y || !mo || !d) return null;
-  return new Date(y, mo - 1, d); // LOCAL
+  return new Date(y, mo - 1, d);
 }
 
 function toYmdFromAnyInput(s) {
   if (!s) return "";
   const str = String(s).trim();
-
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-
   const m = str.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-
   try {
     const d = new Date(str);
     if (Number.isNaN(d.getTime())) return "";
@@ -132,7 +120,6 @@ function pickMotivation({ pct, isLate, done, streak }) {
   return "Começar é a parte mais importante. Hoje conta. 🌱";
 }
 
-/* ===== Desafio (streak) ===== */
 function weekKey(dOrYmd) {
   if (dOrYmd instanceof Date) {
     const dt0 = new Date(dOrYmd.getFullYear(), dOrYmd.getMonth(), dOrYmd.getDate());
@@ -198,7 +185,6 @@ function calcStreak(keysSet, freq) {
   return s;
 }
 
-/* ===== Notificações (local PWA) ===== */
 async function notifyLocal(title, body) {
   try {
     const reg = await navigator.serviceWorker?.ready;
@@ -210,9 +196,7 @@ async function notifyLocal(title, body) {
       });
       return;
     }
-  } catch {
-    // fallback abaixo
-  }
+  } catch {}
 
   if ("Notification" in window && Notification.permission === "granted") {
     // eslint-disable-next-line no-new
@@ -230,7 +214,6 @@ async function pedirPermissaoNotif() {
   else alert("✅ Notificações ativadas!");
 }
 
-/* ===== Ícones sugeridos ===== */
 const ICONES_SUGERIDOS = [
   "🎯", "💰", "🏦", "📈", "🧾", "💳", "🏠", "🚗",
   "✈️", "🎓", "🩺", "🛒", "🍽️", "🎮", "📚", "🔧",
@@ -238,15 +221,10 @@ const ICONES_SUGERIDOS = [
 ];
 const ICONES_PADRAO_QTD = 10;
 
-/**
- * ✅ Metas recebe canWrite:
- * - canWrite=false => somente leitura (trava criar/editar/excluir/progresso/check-in)
- */
 export default function Metas({ canWrite = false }) {
   const canMutate = !!canWrite;
   const hojeYmd = useMemo(() => ymd(new Date()), []);
 
-  /* ================= AUTH ================= */
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
 
@@ -262,7 +240,6 @@ export default function Metas({ canWrite = false }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  /* ================= UI (recolher seções) ================= */
   const [uiShowNova, setUiShowNova] = useState(true);
   const [uiShowAtivas, setUiShowAtivas] = useState(true);
   const [uiShowArquivadas, setUiShowArquivadas] = useState(false);
@@ -270,13 +247,11 @@ export default function Metas({ canWrite = false }) {
   const [uiIconsNovaOpen, setUiIconsNovaOpen] = useState(false);
   const [uiIconsEditOpen, setUiIconsEditOpen] = useState(false);
 
-  /* ================= DADOS ================= */
   const [loading, setLoading] = useState(false);
   const [metas, setMetas] = useState([]);
   const [movs, setMovs] = useState([]);
   const [checkins, setCheckins] = useState([]);
 
-  // Limite automático por categoria (gastos do mês)
   const [gastosCategorias, setGastosCategorias] = useState(new Map());
   const [categoriasLanc, setCategoriasLanc] = useState([]);
 
@@ -305,10 +280,6 @@ export default function Metas({ canWrite = false }) {
     for (const l of data || []) {
       const cat = l.categoria || "Outros";
       cats.add(cat);
-
-      // se quiser considerar só pagos:
-      // if (!l.pago) continue;
-
       const v = Number(l.valor) || 0;
       map.set(cat, (map.get(cat) || 0) + v);
     }
@@ -379,9 +350,8 @@ export default function Metas({ canWrite = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  /* ================= NOVA META (form) ================= */
   const [mTitulo, setMTitulo] = useState("");
-  const [mTipo, setMTipo] = useState("guardar"); // guardar | pagar | limitar | limite_auto
+  const [mTipo, setMTipo] = useState("guardar");
   const [mAlvo, setMAlvo] = useState("");
   const [mInicial, setMInicial] = useState("");
 
@@ -437,21 +407,16 @@ export default function Metas({ canWrite = false }) {
       tipo: modoLimiteAuto ? "limitar" : mTipo,
       valor_alvo: alvo,
       valor_inicial: !modoLimiteAuto && inicial > 0 ? inicial : 0,
-
       data_inicio: inicio,
       data_fim: fim ? fim : null,
-
       icone: iconeFinal,
       cor: mCor || "#2563EB",
       ativo: true,
-
       modo_limite_auto: modoLimiteAuto,
       limite_categoria: modoLimiteAuto ? (mCategoriaLimite || "Outros") : null,
       limite_periodo: "mensal",
-
       desafio_ativo: !!mDesafioAtivo,
       desafio_freq: mDesafioFreq || "semanal",
-
       lembrete_ativo: !!mLembreteAtivo,
       lembrete_hora: mLembreteAtivo ? (mLembreteHora || "08:30") : null,
     };
@@ -501,7 +466,6 @@ export default function Metas({ canWrite = false }) {
     alert("✅ Meta criada!");
   }
 
-  /* ================= MOVIMENTAÇÕES / CHECKINS / AGREGADOS ================= */
   const movsByMeta = useMemo(() => {
     const map = new Map();
     for (const mv of movs || []) {
@@ -526,7 +490,6 @@ export default function Metas({ canWrite = false }) {
       const cks = checkinsByMeta.get(m.id) || [];
 
       const modoLimiteAuto = !!m.modo_limite_auto && !!m.limite_categoria;
-
       const alvo = Number(m.valor_alvo) || 0;
 
       let atual = 0;
@@ -558,10 +521,10 @@ export default function Metas({ canWrite = false }) {
       if (m.data_fim && diasRest !== null && diasRest >= 0) {
         const faltaCalc = modoLimiteAuto ? Math.max(0, atual - alvo) : falta;
         if (faltaCalc > 0) {
-          const meses = Math.max(1, Math.ceil(diasRest / 30));
-          const semanas = Math.max(1, Math.ceil(diasRest / 7));
-          porMes = faltaCalc / meses;
-          porSemana = faltaCalc / semanas;
+          const mesesCalc = Math.max(1, Math.ceil(diasRest / 30));
+          const semanasCalc = Math.max(1, Math.ceil(diasRest / 7));
+          porMes = faltaCalc / mesesCalc;
+          porSemana = faltaCalc / semanasCalc;
         }
       }
 
@@ -645,7 +608,6 @@ export default function Metas({ canWrite = false }) {
     return { ativas, media, destaque };
   }, [metasAtivas]);
 
-  /* ================= NOTIFICAÇÕES (timer local) ================= */
   const lastNotifiedRef = useRef(new Set());
 
   useEffect(() => {
@@ -672,7 +634,6 @@ export default function Metas({ canWrite = false }) {
     return () => clearInterval(id);
   }, [user, metasView]);
 
-  /* ================= MODAL: ADICIONAR PROGRESSO ================= */
   const [addOpen, setAddOpen] = useState(false);
   const [addMeta, setAddMeta] = useState(null);
   const [addValor, setAddValor] = useState("");
@@ -727,7 +688,6 @@ export default function Metas({ canWrite = false }) {
     alert("✅ Progresso registrado!");
   }
 
-  /* ================= DESAFIO: CHECK-IN ================= */
   async function fazerCheckin(meta) {
     if (!user || !meta) return;
 
@@ -761,7 +721,6 @@ export default function Metas({ canWrite = false }) {
     alert("✅ Check-in registrado! 🔥");
   }
 
-  /* ================= MODAL: EDITAR META ================= */
   const [editOpen, setEditOpen] = useState(false);
   const [editMeta, setEditMeta] = useState(null);
 
@@ -850,14 +809,11 @@ export default function Metas({ canWrite = false }) {
       data_fim: fim ? fim : null,
       icone: iconeFinal,
       cor: eCor || "#2563EB",
-
       modo_limite_auto: !!eModoLimiteAuto,
       limite_categoria: eModoLimiteAuto ? (eCategoriaLimite || "Outros") : null,
       limite_periodo: "mensal",
-
       desafio_ativo: !!eDesafioAtivo,
       desafio_freq: eDesafioFreq || "semanal",
-
       lembrete_ativo: !!eLembreteAtivo,
       lembrete_hora: eLembreteAtivo ? (eLembreteHora || "08:30") : null,
     };
@@ -968,7 +924,6 @@ export default function Metas({ canWrite = false }) {
     alert("🗑️ Meta excluída!");
   }
 
-  /* ================= UI ================= */
   if (!authReady) return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Carregando…</p>;
   if (!user) return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Faça login novamente.</p>;
 
@@ -1007,7 +962,6 @@ export default function Metas({ canWrite = false }) {
           </div>
         </div>
 
-        {/* ====== TOP CARDS ====== */}
         <div style={styles.cards}>
           <div style={styles.card}>
             <div style={styles.cardLabel}>Metas ativas</div>
@@ -1058,7 +1012,6 @@ export default function Metas({ canWrite = false }) {
           <p style={{ marginTop: 10, color: "var(--muted)", fontWeight: 900 }}>Carregando dados…</p>
         ) : null}
 
-        {/* ====== NOVA META ====== */}
         <CollapseSection
           id="nova_meta"
           title="Nova meta"
@@ -1117,7 +1070,6 @@ export default function Metas({ canWrite = false }) {
                 </select>
               )}
 
-              {/* ✅ Datas (agrupadas) */}
               <div style={styles.dateGroup}>
                 <div style={styles.dateCol}>
                   <div style={styles.miniLabel}>Início</div>
@@ -1144,7 +1096,6 @@ export default function Metas({ canWrite = false }) {
                 </div>
               </div>
 
-              {/* ✅ Ícones recolhíveis */}
               <div style={styles.iconBlock}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                   <div style={styles.miniLabel}>Ícone</div>
@@ -1227,7 +1178,6 @@ export default function Metas({ canWrite = false }) {
                 disabled={!canMutate}
               />
 
-              {/* ✅ Desafio */}
               <label style={styles.checkLabel}>
                 <input
                   type="checkbox"
@@ -1250,7 +1200,6 @@ export default function Metas({ canWrite = false }) {
                 </select>
               ) : null}
 
-              {/* ✅ Lembretes */}
               <label style={styles.checkLabel}>
                 <input
                   type="checkbox"
@@ -1283,8 +1232,6 @@ export default function Metas({ canWrite = false }) {
           </div>
         </CollapseSection>
 
-        {/* ====== METAS ATIVAS / ARQUIVADAS + MODAIS (continua na PARTE 2) ====== */}
-        
         <CollapseSection
           id="ativas"
           title={`Metas ativas (${metasAtivas.length})`}
@@ -1347,7 +1294,6 @@ export default function Metas({ canWrite = false }) {
           </div>
         </CollapseSection>
 
-        {/* ====== MODAL: ADD PROGRESSO ====== */}
         {addOpen ? (
           <Modal onClose={() => setAddOpen(false)} title="Adicionar progresso">
             <div style={{ display: "grid", gap: 10 }}>
@@ -1399,7 +1345,6 @@ export default function Metas({ canWrite = false }) {
           </Modal>
         ) : null}
 
-        {/* ====== MODAL: EDITAR META ====== */}
         {editOpen ? (
           <Modal onClose={() => setEditOpen(false)} title="Editar meta">
             <div style={{ display: "grid", gap: 10 }}>
@@ -1455,7 +1400,6 @@ export default function Metas({ canWrite = false }) {
                   </div>
                 </div>
 
-                {/* Limite automático (mensal) */}
                 <label style={styles.checkLabel} title="Limite automático por categoria (mensal)">
                   <input
                     type="checkbox"
@@ -1479,7 +1423,6 @@ export default function Metas({ canWrite = false }) {
                   </select>
                 ) : null}
 
-                {/* Ícone recolhível */}
                 <div style={styles.iconBlock}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                     <div style={styles.miniLabel}>Ícone</div>
@@ -1559,7 +1502,6 @@ export default function Metas({ canWrite = false }) {
                   disabled={!canMutate}
                 />
 
-                {/* Desafio */}
                 <label style={styles.checkLabel}>
                   <input
                     type="checkbox"
@@ -1582,7 +1524,6 @@ export default function Metas({ canWrite = false }) {
                   </select>
                 ) : null}
 
-                {/* Lembrete */}
                 <label style={styles.checkLabel}>
                   <input
                     type="checkbox"
@@ -1625,10 +1566,6 @@ export default function Metas({ canWrite = false }) {
     </div>
   );
 }
-
-/* =========================
-   COMPONENTES AUXILIARES
-   ========================= */
 
 function CollapseSection({ id, title, subtitle, open, onToggle, children }) {
   return (
@@ -1728,7 +1665,6 @@ function MetaCard({
               )}
             </div>
 
-            {/* Barra */}
             <div style={{ ...styles.progressWrap, marginTop: 10 }}>
               <div style={{
                 ...styles.progressBar,
@@ -1737,7 +1673,6 @@ function MetaCard({
               }} />
             </div>
 
-            {/* Prazos / ritmo */}
             <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
               <span style={styles.micro}>
                 Início: <b style={{ color: "var(--text)" }}>{formatShortDate(meta.data_inicio)}</b>
@@ -1778,14 +1713,12 @@ function MetaCard({
               ) : null}
             </div>
 
-            {/* Frase motivacional */}
             <div style={{ marginTop: 10, color: "var(--text)", fontWeight: 900, opacity: 0.9 }}>
               {meta.motivational}
             </div>
           </div>
         </div>
 
-        {/* Ações */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {!archived ? (
             <>
@@ -1851,9 +1784,6 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-/* =========================
-   STYLES (inline)
-   ========================= */
 const styles = {
   page: {
     padding: 12,
