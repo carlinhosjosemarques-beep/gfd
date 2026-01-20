@@ -406,7 +406,7 @@ export default function Metas({ canWrite = false }) {
       titulo,
       tipo: modoLimiteAuto ? "limitar" : mTipo,
       valor_alvo: alvo,
-      valor_inicial: !modoLimiteAuto && inicial > 0 ? inicial : 0,
+      valor_inicial: modoLimiteAuto ? 0 : 0,
       data_inicio: inicio,
       data_fim: fim ? fim : null,
       icone: iconeFinal,
@@ -504,8 +504,16 @@ export default function Metas({ canWrite = false }) {
         done = alvo > 0 ? (gasto <= alvo) : true;
         falta = Math.max(0, alvo - gasto);
       } else {
-        const soma = mvs.reduce((s, x) => s + (Number(x.valor) || 0), 0);
-        atual = (Number(m.valor_inicial) || 0) + soma;
+        const somaMovs = mvs.reduce((s, x) => s + (Number(x.valor) || 0), 0);
+
+        let base = Number(m.valor_inicial) || 0;
+        const hasMovInicial = mvs.some((x) => String(x?.nota || "").trim() === "Valor inicial");
+
+        if (base > 0 && hasMovInicial) {
+          base = 0;
+        }
+
+        atual = base + somaMovs;
         pct = alvo > 0 ? (atual / alvo) * 100 : 0;
         done = alvo > 0 && atual >= alvo;
         falta = Math.max(0, alvo - atual);
@@ -1231,7 +1239,6 @@ export default function Metas({ canWrite = false }) {
             </div>
           </div>
         </CollapseSection>
-
         <CollapseSection
           id="ativas"
           title={`Metas ativas (${metasAtivas.length})`}
@@ -1327,7 +1334,7 @@ export default function Metas({ canWrite = false }) {
                 disabled={!canMutate}
               />
 
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <div style={styles.modalFooterRow}>
                 <button onClick={() => setAddOpen(false)} style={styles.secondaryBtn}>
                   Cancelar
                 </button>
@@ -1346,7 +1353,16 @@ export default function Metas({ canWrite = false }) {
         ) : null}
 
         {editOpen ? (
-          <Modal onClose={() => setEditOpen(false)} title="Editar meta">
+          <Modal onClose={() => setEditOpen(false)} title="Editar meta" footer={
+            <div style={styles.modalFooterRow}>
+              <button onClick={() => setEditOpen(false)} style={styles.secondaryBtn}>
+                Cancelar
+              </button>
+              <button onClick={salvarEditar} style={styles.primaryBtn} disabled={!canMutate}>
+                ✅ Salvar alterações
+              </button>
+            </div>
+          }>
             <div style={{ display: "grid", gap: 10 }}>
               <div style={styles.formRow}>
                 <input
@@ -1545,15 +1561,6 @@ export default function Metas({ canWrite = false }) {
                 ) : null}
               </div>
 
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                <button onClick={() => setEditOpen(false)} style={styles.secondaryBtn}>
-                  Cancelar
-                </button>
-                <button onClick={salvarEditar} style={styles.primaryBtn} disabled={!canMutate}>
-                  ✅ Salvar alterações
-                </button>
-              </div>
-
               {!canMutate ? (
                 <div style={styles.lockNote}>
                   🔒 Assinatura necessária para editar metas.
@@ -1595,7 +1602,7 @@ function MetaCard({
   onDelete,
   onCheckin,
 }) {
-  const pct = meta.modoLimiteAuto ? clampPct(meta.pct) : clampPct(meta.pct);
+  const pct = clampPct(meta.pct);
   const done = meta.modoLimiteAuto
     ? (meta.valor_alvo > 0 ? (meta.atual <= meta.valor_alvo) : true)
     : meta.done;
@@ -1770,15 +1777,29 @@ function MetaCard({
   );
 }
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, footer = null }) {
   return (
-    <div style={styles.modalOverlay} onMouseDown={onClose}>
-      <div style={styles.modal} onMouseDown={(e) => e.stopPropagation()}>
-        <div style={styles.modalHead}>
+    <div
+      style={styles.modalOverlay}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div style={styles.modalCard} onMouseDown={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeaderSticky}>
           <div style={{ fontWeight: 1000 }}>{title}</div>
           <button onClick={onClose} style={styles.smallBtn}>✖</button>
         </div>
-        <div style={{ marginTop: 10 }}>{children}</div>
+
+        <div style={styles.modalBodyScroll}>
+          {children}
+        </div>
+
+        {footer ? (
+          <div style={styles.modalFooterSticky}>
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -2041,26 +2062,56 @@ const styles = {
   modalOverlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,.45)",
+    background: "rgba(0,0,0,.55)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: 12,
-    zIndex: 50,
+    padding:
+      "max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))",
+    zIndex: 70,
   },
-  modal: {
+  modalCard: {
     width: "min(860px, 100%)",
+    maxHeight: "min(90dvh, 720px)",
     borderRadius: 18,
     border: "1px solid var(--border)",
     background: "var(--card)",
     color: "var(--text)",
-    padding: 12,
-    boxShadow: "0 18px 40px rgba(0,0,0,.25)",
+    boxShadow: "0 18px 40px rgba(0,0,0,.28)",
+    display: "grid",
+    gridTemplateRows: "auto 1fr auto",
+    overflow: "hidden",
   },
-  modalHead: {
+  modalHeaderSticky: {
+    position: "sticky",
+    top: 0,
+    zIndex: 2,
     display: "flex",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    alignItems: "center",
+    padding: "12px 12px",
+    borderBottom: "1px solid var(--border)",
+    background: "var(--card)",
+  },
+  modalBodyScroll: {
+    padding: 12,
+    overflow: "auto",
+    WebkitOverflowScrolling: "touch",
+    minHeight: 0,
+  },
+  modalFooterSticky: {
+    position: "sticky",
+    bottom: 0,
+    zIndex: 2,
+    padding: 12,
+    borderTop: "1px solid var(--border)",
+    background: "var(--card)",
+  },
+  modalFooterRow: {
+    display: "flex",
+    gap: 10,
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
   },
 };

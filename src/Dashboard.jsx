@@ -84,7 +84,6 @@ function vencimentoInfo(l) {
   return null;
 }
 
-// ✅ sem new Date("YYYY-MM-DD") (evita -1 dia)
 function formatBRfromYmd(ymdStr) {
   if (!ymdStr) return "";
   const [y, m, d] = String(ymdStr).split("-").map(Number);
@@ -190,9 +189,7 @@ function CollapseSection({ id, title, subtitle, open, onToggle, children, rightS
   );
 }
 
-// ✅ recebe canWrite do App.jsx (sem default "true" para não liberar por engano)
 export default function Dashboard({ canWrite } = {}) {
-  // ✅ trava central (modo leitura)
   function guardWrite(msg = "Assinatura inativa. Você está no modo leitura.") {
     if (canWrite) return true;
     alert(msg);
@@ -299,7 +296,7 @@ export default function Dashboard({ canWrite } = {}) {
   }
 
   function toggleMenu(id) {
-    if (!canWrite) return; // ✅ read-only: não abre menu
+    if (!canWrite) return;
     setMenuOpenId((prev) => {
       const next = prev === id ? null : id;
       if (next) openMenuAtButton(id);
@@ -345,7 +342,7 @@ export default function Dashboard({ canWrite } = {}) {
   }
 
   function toggleContaMenu(id) {
-    if (!canWrite) return; // ✅ read-only: não abre menu
+    if (!canWrite) return;
     setContaMenuOpenId((prev) => {
       const next = prev === id ? null : id;
       if (next) openContaMenuAtButton(id);
@@ -391,7 +388,7 @@ export default function Dashboard({ canWrite } = {}) {
   }
 
   function toggleFixaMenu(id) {
-    if (!canWrite) return; // ✅ read-only: não abre menu
+    if (!canWrite) return;
     setFixaMenuOpenId((prev) => {
       const next = prev === id ? null : id;
       if (next) openFixaMenuAtButton(id);
@@ -441,7 +438,6 @@ export default function Dashboard({ canWrite } = {}) {
       window.removeEventListener("scroll", onScrollOrResize, true);
       window.removeEventListener("resize", onScrollOrResize);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuOpenId, contaMenuOpenId, fixaMenuOpenId]);
 
   const [contas, setContas] = useState([]);
@@ -683,7 +679,6 @@ export default function Dashboard({ canWrite } = {}) {
     setEditFixaOpen(false);
     setEditFixaId(null);
   }
-
   async function salvarEdicaoFixa() {
     if (!guardWrite()) return;
     if (!editFixaId) return;
@@ -734,7 +729,6 @@ export default function Dashboard({ canWrite } = {}) {
   }
 
   async function garantirFixasNoMes(fixasList = null) {
-    // ✅ modo leitura: NÃO insere lançamentos automaticamente
     if (!canWrite) return;
     if (!fixasOk) return;
 
@@ -845,7 +839,6 @@ export default function Dashboard({ canWrite } = {}) {
       if (!contaId && (contasList || []).length > 0) setContaId(contasList[0].id);
       if (!fixaContaId && (contasList || []).length > 0) setFixaContaId("");
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroYM, filtroContaId]);
 
   async function salvar() {
@@ -882,6 +875,7 @@ export default function Dashboard({ canWrite } = {}) {
       await carregarLancamentos();
       return;
     }
+
     const n = Math.max(2, Math.min(120, Number(qtdParcelas || 2)));
     const grupo = uuidLike();
 
@@ -1205,7 +1199,6 @@ export default function Dashboard({ canWrite } = {}) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editOpen, editGroupOpen, editContaOpen, editFixaOpen, canWrite]);
 
   const saldosPorConta = useMemo(() => {
@@ -1317,7 +1310,6 @@ export default function Dashboard({ canWrite } = {}) {
     });
 
     return out.slice().sort(sortComparator);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listaBusca, chip, sortMode]);
 
   const fixasDoMes = useMemo(() => {
@@ -1487,7 +1479,7 @@ export default function Dashboard({ canWrite } = {}) {
                                 <span style={{
                                   padding: "2px 10px",
                                   borderRadius: 999,
-                                  background: "var(--controlBg2, var(--card2, var(--card)))",
+                                  background: "var(--controlBg2)",
                                   border: `1px solid ${badge.ring}88`,
                                   color: badge.fg,
                                   fontWeight: 1000,
@@ -1670,35 +1662,27 @@ export default function Dashboard({ canWrite } = {}) {
           </div>
         </div>
 
-        <div className="gfd-grid2" style={styles.grid2}>
+        <div style={styles.gridTop}>
           <div style={styles.card}>
-            <div style={styles.cardTitle}>Receitas</div>
-            <div style={styles.bigNumber}>{money(receitasRecebidas)}</div>
-            <div style={styles.mutedLine}>⏳ A receber: <b>{money(receitasAReceber)}</b></div>
-            <p style={{ marginTop: 10, marginBottom: 0, opacity: 0.88, fontWeight: 900 }}>
-              💰 Recebido: <b>{money(receitasRecebidas)}</b> | ⏳ A receber: {money(receitasAReceber)}
-            </p>
-          </div>
-
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>Despesas</div>
-            <div style={styles.bigNumber}>{money(despesasPagas)}</div>
-            <div style={styles.mutedLine}>⏳ A pagar: <b>{money(despesasAPagar)}</b></div>
-            <p style={{ marginTop: 10, marginBottom: 0, opacity: 0.88, fontWeight: 900 }}>
-              💸 Pago: <b>{money(despesasPagas)}</b> | ⏳ A pagar: {money(despesasAPagar)}
-            </p>
-          </div>
-        </div>
-
-        <div style={{ ...styles.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <div>
-            <div style={styles.cardTitle}>Saldo real (mês)</div>
-            <div style={{ fontSize: 22, fontWeight: 1000 }}>
-              {saldoReal >= 0 ? "🟢" : "🔴"} {money(saldoReal)}
+            <div style={styles.kpiLabel}>Saldo real (pagos)</div>
+            <div style={styles.kpiValue}>{money(saldoReal)}</div>
+            <div style={styles.kpiHint}>
+              Receitas recebidas {money(receitasRecebidas)} • Despesas pagas {money(despesasPagas)}
             </div>
           </div>
-          <div style={{ color: "var(--muted)", fontSize: 13, fontWeight: 900 }}>
-            Saldo real = receitas recebidas − despesas pagas
+
+          <div style={styles.card}>
+            <div style={styles.kpiLabel}>Pendentes (mês)</div>
+            <div style={styles.kpiValue}>{money(despesasAPagar + receitasAReceber)}</div>
+            <div style={styles.kpiHint}>
+              A pagar {money(despesasAPagar)} • A receber {money(receitasAReceber)}
+            </div>
+          </div>
+
+          <div style={styles.card}>
+            <div style={styles.kpiLabel}>Saldo total (contas)</div>
+            <div style={styles.kpiValue}>{money(saldoTotalContas)}</div>
+            <div style={styles.kpiHint}>Considera saldo inicial + lançamentos pagos</div>
           </div>
         </div>
 
@@ -1706,383 +1690,225 @@ export default function Dashboard({ canWrite } = {}) {
           <CollapseSection
             id="contas"
             title="Contas"
-            subtitle={`${contas.length} conta(s)`}
-            open={uiShowContas}
-            onToggle={() => setUiShowContas((v) => !v)}
-            rightSlot={<span style={{ fontWeight: 1000 }}>Total: {money(saldoTotalContas)}</span>}
+            subtitle={`${contas.length}`}
+            open={uiOpenContas}
+            onToggle={() => setUiOpenContas((v) => !v)}
           >
-            <div style={{ ...styles.card, padding: 12 }}>
-              <div style={styles.formRow}>
-                <input
-                  placeholder="Nome da conta (ex: Nubank)"
-                  value={contaNome}
-                  onChange={(e) => setContaNome(e.target.value)}
-                  style={styles.input}
-                  aria-label="Nome da conta"
-                  disabled={!canWrite}
-                />
-
-                <select value={contaTipo} onChange={(e) => setContaTipo(e.target.value)} style={styles.select} aria-label="Tipo da conta" disabled={!canWrite}>
-                  <option value="Conta">Conta</option>
-                  <option value="Cartão">Cartão</option>
-                  <option value="Dinheiro">Dinheiro</option>
-                  <option value="Investimento">Investimento</option>
-                  <option value="Outros">Outros</option>
-                </select>
-
-                <input
-                  placeholder="Saldo inicial (opcional)"
-                  value={contaSaldoInicial}
-                  onChange={(e) => setContaSaldoInicial(e.target.value)}
-                  style={styles.input}
-                  aria-label="Saldo inicial da conta"
-                  disabled={!canWrite}
-                />
-
-                <button onClick={criarConta} style={styles.primaryBtn} aria-label="Criar conta" disabled={!canWrite}>
-                  ➕ Criar conta
-                </button>
-
-                <span style={{ color: "var(--muted)", fontWeight: 900 }}>
-                  {loadingContas ? "Carregando..." : ""}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-              {contas.length === 0 ? (
-                <div style={styles.card}>
-                  <p style={{ margin: 0, color: "var(--muted)", fontWeight: 900 }}>
-                    Nenhuma conta cadastrada. Crie pelo menos uma (ex: Nubank, Itaú, Dinheiro).
-                  </p>
-                </div>
-              ) : null}
-
-              {saldosPorConta.map((c) => (
-                <div
-                  key={c.id}
-                  style={{ ...styles.card, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-                      <b style={{ fontSize: 15 }}>{c.nome}</b>
-                      <span style={{ color: "var(--muted)", fontWeight: 900 }}>({c.tipo})</span>
-                      <span style={styles.badgeMuted}>mês</span>
-                    </div>
-                    <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 4, fontWeight: 900 }}>
-                      + Receitas pagas: {money(c.receitas)} | - Despesas pagas: {money(c.despesas)}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <div style={{ fontWeight: 1000, fontSize: 16 }}>{money(c.saldo)}</div>
-
-                    <button
-                      ref={(node) => setContaBtnRef(c.id, node)}
-                      onClick={() => toggleContaMenu(c.id)}
-                      title={canWrite ? "Opções da conta" : "Modo leitura"}
-                      aria-haspopup="menu"
-                      aria-expanded={contaMenuOpenId === c.id}
-                      aria-label="Abrir opções da conta"
-                      style={{
-                        ...styles.iconButton,
-                        opacity: canWrite ? 1 : 0.45,
-                        cursor: canWrite ? "pointer" : "not-allowed",
-                      }}
-                      disabled={!canWrite}
-                    >
-                      ⋮
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {editContaOpen ? (
-              <Modal title="Editar conta" onClose={fecharEditarConta}>
-                <div style={{ display: "grid", gap: 10 }}>
-                  <label style={styles.label}>
-                    Nome
-                    <input value={editContaNome} onChange={(e) => setEditContaNome(e.target.value)} style={styles.input} disabled={!canWrite} />
-                  </label>
-
-                  <label style={styles.label}>
-                    Tipo
-                    <select value={editContaTipo} onChange={(e) => setEditContaTipo(e.target.value)} style={styles.select} disabled={!canWrite}>
-                      <option value="Conta">Conta</option>
-                      <option value="Cartão">Cartão</option>
-                      <option value="Dinheiro">Dinheiro</option>
-                      <option value="Investimento">Investimento</option>
-                      <option value="Outros">Outros</option>
-                    </select>
-                  </label>
-
-                  <label style={styles.label}>
-                    Saldo inicial
-                    <input
-                      value={editContaSaldo}
-                      onChange={(e) => setEditContaSaldo(e.target.value)}
-                      placeholder="Ex: 1000 ou 1000,50"
-                      style={styles.input}
-                      disabled={!canWrite}
-                    />
-                  </label>
-
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                    <button onClick={fecharEditarConta} style={styles.secondaryBtn}>Cancelar</button>
-                    <button onClick={salvarEdicaoConta} style={styles.primaryBtn} disabled={!canWrite}>Salvar</button>
-                  </div>
-
-                  <p style={{ color: "var(--muted)", fontSize: 12, margin: 0, fontWeight: 900 }}>
-                    O saldo mostrado no card é: saldo inicial + receitas pagas − despesas pagas (no mês).
-                  </p>
-                </div>
-              </Modal>
-            ) : null}
-          </CollapseSection>
-        ) : (
-          <CollapseSection id="contas_closed" title="Contas" subtitle="recolhido" open={false} onToggle={() => setUiShowContas(true)}>
-            <div />
-          </CollapseSection>
-        )}
-
-        {uiShowFixas ? (
-          <CollapseSection
-            id="fixas"
-            title="Fixas recorrentes"
-            subtitle={fixasOk ? `${(fixas || []).length} ativa(s)` : "indisponível"}
-            open={uiShowFixas}
-            onToggle={() => setUiShowFixas((v) => !v)}
-          >
-            {!fixasOk ? (
-              <div style={{ ...styles.card, borderColor: "rgba(239,68,68,.35)", background: "rgba(239,68,68,.08)" }}>
-                <b>Atenção:</b> a tabela <code>fixas</code> não foi encontrada (ou deu erro).<br />
-                Crie a tabela no Supabase para habilitar fixas recorrentes automaticamente.
-              </div>
-            ) : null}
-
-            <div style={{ ...styles.card, padding: 12, marginTop: 10 }}>
-              <div style={styles.formRow}>
-                <input
-                  placeholder="Descrição da fixa (ex: Aluguel)"
-                  value={fixaDescricao}
-                  onChange={(e) => setFixaDescricao(e.target.value)}
-                  style={styles.input}
-                  aria-label="Descrição da fixa"
-                  disabled={!canWrite}
-                />
-
-                <input
-                  placeholder="Valor (ex: 1200 ou 1200,50)"
-                  value={fixaValor}
-                  onChange={(e) => setFixaValor(e.target.value)}
-                  style={styles.input}
-                  aria-label="Valor da fixa"
-                  disabled={!canWrite}
-                />
-
-                <select
-                  value={fixaTipo}
-                  onChange={(e) => {
-                    const t = e.target.value;
-                    setFixaTipo(t);
-                    setFixaCategoria(t === "receita" ? "Salário" : "Alimentação");
-                  }}
-                  style={styles.select}
-                  aria-label="Tipo da fixa"
-                  disabled={!canWrite}
-                >
-                  <option value="despesa">Despesa</option>
-                  <option value="receita">Receita</option>
-                </select>
-
-                <select value={fixaCategoria} onChange={(e) => setFixaCategoria(e.target.value)} style={styles.select} aria-label="Categoria da fixa" disabled={!canWrite}>
-                  {categoriasFixaNovo.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-
-                <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, fontWeight: 1000 }}>
-                  Dia:
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ ...styles.card, padding: 12 }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                   <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={fixaDia}
-                    onChange={(e) => setFixaDia(e.target.value)}
-                    style={{ ...styles.input, width: 84 }}
-                    aria-label="Dia de vencimento da fixa"
+                    value={contaNome}
+                    onChange={(e) => setContaNome(e.target.value)}
+                    placeholder="Nome da conta (ex: Nubank)"
+                    style={styles.input}
                     disabled={!canWrite}
                   />
-                </label>
 
-                <select value={fixaContaId} onChange={(e) => setFixaContaId(e.target.value)} style={styles.select} aria-label="Conta vinculada da fixa" disabled={!canWrite}>
-                  <option value="">(Sem conta)</option>
-                  {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
-
-                <button onClick={criarFixa} disabled={!fixasOk || !canWrite} style={styles.primaryBtn} aria-label="Criar fixa">
-                  ➕ Criar fixa
-                </button>
-
-                <button
-                  onClick={async () => {
-                    if (!guardWrite()) return;
-                    const lista = await carregarFixas();
-                    await garantirFixasNoMes(lista);
-                    await carregarLancamentos();
-                    alert("Fixas do mês geradas/verificadas.");
-                  }}
-                  disabled={!fixasOk || !canWrite}
-                  style={styles.secondaryBtn}
-                  aria-label="Gerar fixas do mês"
-                >
-                  🔁 Gerar fixas do mês
-                </button>
-
-                <span style={{ color: "var(--muted)", fontWeight: 900 }}>
-                  {loadingFixas ? "Carregando..." : ""}
-                </span>
-              </div>
-            </div>
-
-            {fixasOk && (fixas || []).length > 0 ? (
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                {(fixas || []).map((f) => (
-                  <div
-                    key={f.id}
-                    style={{ ...styles.card, display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}
+                  <select
+                    value={contaTipo}
+                    onChange={(e) => setContaTipo(e.target.value)}
+                    style={styles.select}
+                    disabled={!canWrite}
                   >
+                    <option value="corrente">Conta corrente</option>
+                    <option value="poupanca">Poupança</option>
+                    <option value="cartao">Cartão</option>
+                    <option value="invest">Investimentos</option>
+                    <option value="outros">Outros</option>
+                  </select>
+
+                  <input
+                    value={contaSaldo}
+                    onChange={(e) => setContaSaldo(e.target.value)}
+                    placeholder="Saldo inicial (opcional)"
+                    style={styles.input}
+                    disabled={!canWrite}
+                  />
+
+                  <button onClick={salvarConta} style={styles.primaryBtn} disabled={!canWrite}>
+                    ➕ Adicionar
+                  </button>
+
+                  {!canWrite ? (
+                    <span style={styles.lockInline}>🔒 Modo leitura</span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                {saldosPorConta.map((c) => (
+                  <div key={c.id} style={styles.row}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
-                        <b>{f.descricao}</b>
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                        <b style={{ fontSize: 14 }}>{c.nome}</b>
+                        <span style={styles.badgeLight}>{String(c.tipo || "").toUpperCase()}</span>
                         <span style={{ color: "var(--muted)", fontWeight: 900 }}>
-                          ({String(f.tipo).toUpperCase()} • dia {f.dia_vencimento})
+                          saldo: <b style={{ color: "var(--text)" }}>{money(c.saldo)}</b>
                         </span>
-                        <span style={styles.badgeMuted}>{f.categoria}</span>
                       </div>
-                      <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 4, fontWeight: 900 }}>
-                        {money(f.valor)}{" "}
-                        {f.conta_id ? (
-                          <span>• {contasById.get(f.conta_id)?.nome || "Conta"}</span>
-                        ) : (
-                          <span>• (Sem conta)</span>
-                        )}
+                      <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
+                        receitas: {money(c.receitas)} • despesas: {money(c.despesas)}
                       </div>
                     </div>
 
-                    <button
-                      ref={(node) => setFixaBtnRef(f.id, node)}
-                      onClick={() => toggleFixaMenu(f.id)}
-                      title={canWrite ? "Opções da fixa" : "Modo leitura"}
-                      aria-haspopup="menu"
-                      aria-expanded={fixaMenuOpenId === f.id}
-                      aria-label="Abrir opções da fixa"
-                      style={{
-                        ...styles.iconButton,
-                        opacity: canWrite ? 1 : 0.45,
-                        cursor: canWrite ? "pointer" : "not-allowed",
-                      }}
-                      disabled={!canWrite}
-                    >
-                      ⋮
-                    </button>
+                    <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      <button
+                        ref={(node) => setContaMenuBtnRef(c.id, node)}
+                        onClick={() => toggleContaMenu(c.id)}
+                        style={styles.iconButton}
+                        aria-haspopup="menu"
+                        aria-expanded={contaMenuOpenId === c.id}
+                        disabled={!canWrite}
+                        title={!canWrite ? "Modo leitura" : "Opções"}
+                      >
+                        ⋮
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
-            ) : null}
+            </div>
+          </CollapseSection>
+        ) : null}
 
-            {editFixaOpen ? (
-              <Modal title="Editar fixa" onClose={fecharEditarFixa}>
-                <div style={{ display: "grid", gap: 10 }}>
-                  <label style={styles.label}>
-                    Descrição
-                    <input value={editFixaDescricao} onChange={(e) => setEditFixaDescricao(e.target.value)} style={styles.input} disabled={!canWrite} />
-                  </label>
+        {uiShowFixas && fixasOk ? (
+          <CollapseSection
+            id="fixas"
+            title="Fixas"
+            subtitle={`${fixas.length}`}
+            open={uiOpenFixas}
+            onToggle={() => setUiOpenFixas((v) => !v)}
+          >
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ ...styles.card, padding: 12 }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <input
+                    value={fixaDescricao}
+                    onChange={(e) => setFixaDescricao(e.target.value)}
+                    placeholder="Descrição (ex: Aluguel)"
+                    style={styles.input}
+                    disabled={!canWrite}
+                  />
 
-                  <label style={styles.label}>
-                    Valor
-                    <input value={editFixaValor} onChange={(e) => setEditFixaValor(e.target.value)} style={styles.input} disabled={!canWrite} />
-                  </label>
+                  <input
+                    value={fixaValor}
+                    onChange={(e) => setFixaValor(e.target.value)}
+                    placeholder="Valor"
+                    style={styles.input}
+                    disabled={!canWrite}
+                  />
 
-                  <label style={styles.label}>
-                    Tipo
-                    <select
-                      value={editFixaTipo}
-                      onChange={(e) => {
-                        const t = e.target.value;
-                        setEditFixaTipo(t);
-                        setEditFixaCategoria(t === "receita" ? "Salário" : "Alimentação");
-                      }}
-                      style={styles.select}
-                      disabled={!canWrite}
-                    >
-                      <option value="despesa">Despesa</option>
-                      <option value="receita">Receita</option>
-                    </select>
-                  </label>
+                  <select
+                    value={fixaTipo}
+                    onChange={(e) => setFixaTipo(e.target.value)}
+                    style={styles.select}
+                    disabled={!canWrite}
+                  >
+                    <option value="despesa">Despesa</option>
+                    <option value="receita">Receita</option>
+                  </select>
 
-                  <label style={styles.label}>
-                    Categoria
-                    <select value={editFixaCategoria} onChange={(e) => setEditFixaCategoria(e.target.value)} style={styles.select} disabled={!canWrite}>
-                      {categoriasFixaEdit.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </label>
+                  <select
+                    value={fixaCategoria}
+                    onChange={(e) => setFixaCategoria(e.target.value)}
+                    style={styles.select}
+                    disabled={!canWrite}
+                  >
+                    {(categoriasFixaNovo || []).map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
 
-                  <label style={{ ...styles.label, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    Dia do vencimento:
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={editFixaDia}
-                      onChange={(e) => setEditFixaDia(e.target.value)}
-                      style={{ ...styles.input, width: 110 }}
-                      disabled={!canWrite}
-                    />
-                    <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 900 }}>
-                      (se o mês tiver menos dias, ajusta para o último dia)
-                    </span>
-                  </label>
+                  <input
+                    value={fixaDia}
+                    onChange={(e) => setFixaDia(e.target.value)}
+                    placeholder="Dia venc."
+                    style={{ ...styles.input, width: 120 }}
+                    disabled={!canWrite}
+                    inputMode="numeric"
+                  />
 
-                  <label style={styles.label}>
-                    Conta
-                    <select value={editFixaContaId} onChange={(e) => setEditFixaContaId(e.target.value)} style={styles.select} disabled={!canWrite}>
-                      <option value="">(Sem conta)</option>
-                      {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                    </select>
-                  </label>
+                  <select
+                    value={fixaContaId}
+                    onChange={(e) => setFixaContaId(e.target.value)}
+                    style={styles.select}
+                    disabled={!canWrite}
+                    title="Conta (opcional)"
+                  >
+                    <option value="">Conta (opcional)</option>
+                    {contas.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </select>
 
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                    <button onClick={fecharEditarFixa} style={styles.secondaryBtn}>Cancelar</button>
-                    <button onClick={salvarEdicaoFixa} style={styles.primaryBtn} disabled={!canWrite}>Salvar</button>
-                  </div>
+                  <button onClick={salvarFixa} style={styles.primaryBtn} disabled={!canWrite}>
+                    ➕ Criar fixa
+                  </button>
+
+                  {!canWrite ? <span style={styles.lockInline}>🔒 Modo leitura</span> : null}
                 </div>
-              </Modal>
-            ) : null}
-          </CollapseSection>
-        ) : (
-          <CollapseSection id="fixas_closed" title="Fixas recorrentes" subtitle="recolhido" open={false} onToggle={() => setUiShowFixas(true)}>
-            <div />
-          </CollapseSection>
-        )}
+              </div>
 
-        <div ref={novoRef} />
+              <div style={{ display: "grid", gap: 10 }}>
+                {fixas.map((f) => (
+                  <div key={f.id} style={styles.row}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                        <b style={{ fontSize: 14 }}>{f.descricao}</b>
+                        <span style={styles.pillType(f.tipo)}>{String(f.tipo || "").toUpperCase()}</span>
+                        <span style={{ color: "var(--muted)", fontWeight: 900 }}>
+                          {money(f.valor)} • dia {f.dia_vencimento}
+                        </span>
+                        <span style={{ color: "var(--muted)", fontWeight: 900 }}>• {f.categoria}</span>
+                      </div>
+                      <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
+                        Conta:{" "}
+                        <b style={{ color: "var(--text)" }}>
+                          {f.conta_id ? (contasById.get(f.conta_id)?.nome || "Conta") : "—"}
+                        </b>
+                      </div>
+                    </div>
+
+                    <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      <button
+                        ref={(node) => setFixaMenuBtnRef(f.id, node)}
+                        onClick={() => toggleFixaMenu(f.id)}
+                        style={styles.iconButton}
+                        aria-haspopup="menu"
+                        aria-expanded={fixaMenuOpenId === f.id}
+                        disabled={!canWrite}
+                        title={!canWrite ? "Modo leitura" : "Opções"}
+                      >
+                        ⋮
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CollapseSection>
+        ) : null}
+
         {uiShowNovo ? (
           <CollapseSection
             id="novo"
             title="Novo lançamento"
-            subtitle={parcelado ? `parcelado (${qtdParcelas}x)` : "rápido"}
-            open={uiShowNovo}
-            onToggle={() => setUiShowNovo((v) => !v)}
+            subtitle="criar rápido"
+            open={uiOpenNovo}
+            onToggle={() => setUiOpenNovo((v) => !v)}
           >
-            <div style={{ ...styles.card, padding: 12, opacity: canWrite ? 1 : 0.65 }}>
+            <div ref={novoRef} style={{ ...styles.card, padding: 12 }}>
               <div style={styles.formRow}>
-                <input type="date" value={data} onChange={(e) => setData(e.target.value)} style={styles.input} disabled={!canWrite} />
-
                 <input
-                  placeholder="Valor (ex: 1200 ou 1200,50)"
-                  value={valor}
-                  onChange={(e) => setValor(e.target.value)}
-                  style={styles.input}
+                  type="date"
+                  value={data}
+                  onChange={(e) => setData(e.target.value)}
+                  style={{ ...styles.input, minWidth: 190 }}
                   disabled={!canWrite}
                 />
 
@@ -2091,7 +1917,8 @@ export default function Dashboard({ canWrite } = {}) {
                   onChange={(e) => {
                     const t = e.target.value;
                     setTipo(t);
-                    setCategoria(t === "receita" ? "Salário" : "Alimentação");
+                    const cats = t === "despesa" ? categoriasDespesa : categoriasReceita;
+                    if (!cats.includes(categoria)) setCategoria(cats[0] || "Outros");
                   }}
                   style={styles.select}
                   disabled={!canWrite}
@@ -2101,482 +1928,573 @@ export default function Dashboard({ canWrite } = {}) {
                 </select>
 
                 <select value={categoria} onChange={(e) => setCategoria(e.target.value)} style={styles.select} disabled={!canWrite}>
-                  {categoriasNovo.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-
-                <select value={contaId} onChange={(e) => setContaId(e.target.value)} style={styles.select} aria-label="Conta do lançamento" disabled={!canWrite}>
-                  <option value="">(Sem conta)</option>
-                  {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  {(categoriasNovo || []).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
 
                 <input
-                  placeholder="Descrição (ex: Mercado)"
                   value={descricao}
                   onChange={(e) => setDescricao(e.target.value)}
-                  style={styles.input}
+                  placeholder="Descrição"
+                  style={{ ...styles.input, minWidth: 260 }}
                   disabled={!canWrite}
                 />
 
-                <label style={styles.checkLabel}>
-                  <input type="checkbox" checked={parcelado} onChange={(e) => setParcelado(e.target.checked)} disabled={!canWrite} />
+                <input
+                  value={valor}
+                  onChange={(e) => setValor(e.target.value)}
+                  placeholder="Valor"
+                  style={{ ...styles.input, minWidth: 160 }}
+                  disabled={!canWrite}
+                />
+
+                <select
+                  value={contaId || ""}
+                  onChange={(e) => setContaId(e.target.value)}
+                  style={styles.select}
+                  disabled={!canWrite}
+                  title="Conta (opcional)"
+                >
+                  <option value="">Conta (opcional)</option>
+                  {contas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome}
+                    </option>
+                  ))}
+                </select>
+
+                <label style={styles.checkLabel} title="Criar como parcelado">
+                  <input
+                    type="checkbox"
+                    checked={parcelado}
+                    onChange={(e) => setParcelado(e.target.checked)}
+                    disabled={!canWrite}
+                  />
                   Parcelado
                 </label>
 
                 {parcelado ? (
                   <>
-                    <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, fontWeight: 1000 }}>
-                      Parcelas:
-                      <input
-                        type="number"
-                        min="2"
-                        max="120"
-                        value={qtdParcelas}
-                        onChange={(e) => setQtdParcelas(e.target.value)}
-                        style={{ ...styles.input, width: 84 }}
-                        disabled={!canWrite}
-                      />
-                    </label>
+                    <input
+                      value={qtdParcelas}
+                      onChange={(e) => setQtdParcelas(Number(e.target.value || 2))}
+                      style={{ ...styles.input, width: 120 }}
+                      disabled={!canWrite}
+                      inputMode="numeric"
+                      placeholder="Qtd"
+                      title="Quantidade de parcelas"
+                    />
 
-                    <select value={modoParcela} onChange={(e) => setModoParcela(e.target.value)} style={styles.select} aria-label="Modo do valor parcelado" disabled={!canWrite}>
+                    <select value={modoParcela} onChange={(e) => setModoParcela(e.target.value)} style={styles.select} disabled={!canWrite}>
                       <option value="dividir">Dividir total</option>
-                      <option value="parcela">Valor é por parcela</option>
+                      <option value="parcela">Valor por parcela</option>
                     </select>
                   </>
                 ) : null}
 
-                <button onClick={salvar} style={styles.primaryBtn} disabled={!canWrite}>💾 Salvar</button>
+                <button onClick={salvar} style={styles.primaryBtn} disabled={!canWrite}>
+                  ✅ Salvar (Ctrl/⌘ + Enter)
+                </button>
 
-                <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 900 }}>
-                  Dica premium: <b>Ctrl+Enter</b> salva quando você estiver aqui.
-                </span>
+                {!canWrite ? <span style={styles.lockInline}>🔒 Modo leitura</span> : null}
               </div>
             </div>
           </CollapseSection>
-        ) : (
-          <CollapseSection id="novo_closed" title="Novo lançamento" subtitle="recolhido" open={false} onToggle={() => setUiShowNovo(true)}>
-            <div />
-          </CollapseSection>
-        )}
+        ) : null}
 
         {uiShowLista ? (
           <CollapseSection
             id="lista"
             title="Lista"
-            subtitle={`${(listaChips || []).length} item(ns)`}
-            open={uiShowLista}
-            onToggle={() => setUiShowLista((v) => !v)}
-            rightSlot={
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <button onClick={exportarCsv} style={styles.secondaryBtn} title="Exportar CSV" disabled={!canWrite}>
-                  📤 Exportar CSV
-                </button>
-              </div>
-            }
+            subtitle={`${listaChips.length}`}
+            open={uiOpenLista}
+            onToggle={() => setUiOpenLista((v) => !v)}
           >
             <div style={{ ...styles.card, padding: 12 }}>
-              <div style={styles.formRow}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <input
                   ref={buscaRef}
-                  placeholder="Buscar… (descrição, categoria, tipo, conta)"
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
-                  style={{ ...styles.input, minWidth: 0 }}
+                  placeholder="Buscar (descrição, categoria, tipo, conta)"
+                  style={{ ...styles.input, minWidth: 320, flex: "1 1 320px" }}
                 />
 
-                <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={styles.select} aria-label="Ordenar lista">
+                <select value={sortMode} onChange={(e) => setSortMode(e.target.value)} style={styles.select} aria-label="Ordenar">
                   <option value="data">Ordenar: Data</option>
-                  <option value="valor">Ordenar: Valor</option>
                   <option value="vencimento">Ordenar: Vencimento</option>
+                  <option value="valor">Ordenar: Valor</option>
                 </select>
 
-                <button
-                  onClick={() => { setBusca(""); setChip("todos"); setSortMode("data"); }}
-                  style={styles.secondaryBtn}
-                  title="Limpar filtros"
-                >
-                  🧹 Limpar
+                <button onClick={exportarCsv} style={styles.secondaryBtn} disabled={!canWrite} title={!canWrite ? "Modo leitura" : "Exportar CSV"}>
+                  ⬇️ Exportar CSV
                 </button>
-
-                <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
-                  Busca com debounce • filtros instantâneos
-                </span>
               </div>
 
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                {chips.map((c) => {
-                  const active = chip === c.key;
-                  return (
-                    <button
-                      key={c.key}
-                      onClick={() => setChip(c.key)}
-                      style={{
-                        ...styles.chip,
-                        background: active ? "var(--chipOnBg)" : "var(--chipBg)",
-                        borderColor: active ? "var(--chipOnBorder)" : "var(--border)",
-                        color: active ? "var(--chipOnText)" : "var(--text)",
-                      }}
-                      aria-pressed={active}
-                    >
-                      {c.label}
-                    </button>
-                  );
-                })}
+              <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {chips.map((c) => (
+                  <button
+                    key={c.key}
+                    onClick={() => setChip(c.key)}
+                    style={{
+                      ...styles.chip,
+                      ...(chip === c.key ? styles.chipActive : null),
+                    }}
+                    type="button"
+                  >
+                    {c.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div style={{ marginTop: 12 }}>
-              {renderListaSecao("Fixas do mês", fixasDoMes, uiShowListaFixas, () => setUiShowListaFixas((v) => !v), fixasOk ? null : "indisponível")}
-              {renderListaSecao("Parcelas do mês", parcelasDoMes, uiShowListaParcelas, () => setUiShowListaParcelas((v) => !v))}
-              {renderListaSecao("Avulsos do mês", avulsosDoMes, uiShowListaAvulsos, () => setUiShowListaAvulsos((v) => !v))}
-            </div>
-
-            {editOpen ? (
-              <Modal title="Editar lançamento" onClose={fecharEditar}>
-                <div style={{ display: "grid", gap: 10 }}>
-                  <label style={styles.label}>
-                    Data
-                    <input type="date" value={editData} onChange={(e) => setEditData(e.target.value)} style={styles.input} disabled={!canWrite} />
-                  </label>
-
-                  <label style={styles.label}>
-                    Valor
-                    <input value={editValor} onChange={(e) => setEditValor(e.target.value)} style={styles.input} disabled={!canWrite} />
-                  </label>
-
-                  <label style={styles.label}>
-                    Tipo
-                    <select
-                      value={editTipo}
-                      onChange={(e) => {
-                        const t = e.target.value;
-                        setEditTipo(t);
-                        setEditCategoria(t === "receita" ? "Salário" : "Alimentação");
-                      }}
-                      style={styles.select}
-                      disabled={!canWrite}
-                    >
-                      <option value="despesa">Despesa</option>
-                      <option value="receita">Receita</option>
-                    </select>
-                  </label>
-
-                  <label style={styles.label}>
-                    Categoria
-                    <select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} style={styles.select} disabled={!canWrite}>
-                      {categoriasEdit.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </label>
-
-                  <label style={styles.label}>
-                    Conta
-                    <select value={editLancContaId ?? ""} onChange={(e) => setEditLancContaId(e.target.value || null)} style={styles.select} disabled={!canWrite}>
-                      <option value="">(Sem conta)</option>
-                      {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                    </select>
-                  </label>
-
-                  <label style={styles.label}>
-                    Descrição
-                    <input value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} style={styles.input} disabled={!canWrite} />
-                  </label>
-
-                  {editIsParcelado ? (
-                    <div style={{ ...styles.card2, padding: 10 }}>
-                      <div style={{ fontWeight: 1000 }}>ℹ️ Parcela {editParcelaNum}/{editParcelaTotal}</div>
-                      <div style={{ color: "var(--muted)", fontSize: 12, fontWeight: 900 }}>
-                        Para alterar todas as parcelas, use “Editar grupo”.
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                    <button onClick={fecharEditar} style={styles.secondaryBtn}>Cancelar</button>
-                    <button onClick={salvarEdicao} style={styles.primaryBtn} disabled={!canWrite}>Salvar</button>
-                  </div>
-                </div>
-              </Modal>
-            ) : null}
-
-            {editGroupOpen ? (
-              <Modal title="Editar grupo (parcelas)" onClose={fecharEditarGrupo}>
-                <div style={{ display: "grid", gap: 10 }}>
-                  <label style={styles.label}>
-                    Descrição base
-                    <input value={grpDescricaoBase} onChange={(e) => setGrpDescricaoBase(e.target.value)} style={styles.input} disabled={!canWrite} />
-                  </label>
-
-                  <label style={styles.label}>
-                    Tipo
-                    <select
-                      value={grpTipo}
-                      onChange={(e) => {
-                        const t = e.target.value;
-                        setGrpTipo(t);
-                        setGrpCategoria(t === "receita" ? "Salário" : "Alimentação");
-                      }}
-                      style={styles.select}
-                      disabled={!canWrite}
-                    >
-                      <option value="despesa">Despesa</option>
-                      <option value="receita">Receita</option>
-                    </select>
-                  </label>
-
-                  <label style={styles.label}>
-                    Categoria
-                    <select value={grpCategoria} onChange={(e) => setGrpCategoria(e.target.value)} style={styles.select} disabled={!canWrite}>
-                      {categoriasGrupo.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </label>
-
-                  <label style={styles.label}>
-                    Conta
-                    <select value={grpContaId ?? ""} onChange={(e) => setGrpContaId(e.target.value || null)} style={styles.select} disabled={!canWrite}>
-                      <option value="">(Sem conta)</option>
-                      {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                    </select>
-                  </label>
-
-                  <div style={{ ...styles.card2, padding: 12, opacity: canWrite ? 1 : 0.7 }}>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <b>Valor</b>
-
-                      <select value={grpModo} onChange={(e) => setGrpModo(e.target.value)} style={styles.select} disabled={!canWrite}>
-                        <option value="parcela">Valor por parcela</option>
-                        <option value="total">Valor total do grupo</option>
-                      </select>
-
-                      <input value={grpValor} onChange={(e) => setGrpValor(e.target.value)} style={{ ...styles.input, width: 160 }} disabled={!canWrite} />
-                      <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 900 }}>
-                        {grpModo === "total" ? "Divide automaticamente e ajusta a última parcela." : "Aplica o mesmo valor a todas."}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                    <button onClick={fecharEditarGrupo} style={styles.secondaryBtn}>Cancelar</button>
-                    <button onClick={salvarEdicaoGrupo} style={styles.primaryBtn} disabled={!canWrite}>Salvar grupo</button>
-                  </div>
-                </div>
-              </Modal>
-            ) : null}
+            {renderListaSecao("Fixas", fixasDoMes, uiOpenListaFixas, () => setUiOpenListaFixas((v) => !v), "geradas automaticamente")}
+            {renderListaSecao("Parcelas", parcelasDoMes, uiOpenListaParcelas, () => setUiOpenListaParcelas((v) => !v), "compras parceladas")}
+            {renderListaSecao("Avulsos", avulsosDoMes, uiOpenListaAvulsos, () => setUiOpenListaAvulsos((v) => !v), "lances únicos")}
           </CollapseSection>
-        ) : (
-          <CollapseSection id="lista_closed" title="Lista" subtitle="recolhido" open={false} onToggle={() => setUiShowLista(true)}>
-            <div />
-          </CollapseSection>
-        )}
+        ) : null}
 
-        {menuOpenId && canWrite ? (
-          <div
-            ref={menuBoxRef}
-            role="menu"
-            aria-label="Menu de ações do lançamento"
-            style={{ ...styles.menuFixed, top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+        {/* MENUS (Portals) */}
+        {menuOpenId ? (
+          <PortalMenu
+            anchorEl={menuBtnRefs.get(menuOpenId)}
+            onClose={() => setMenuOpenId(null)}
           >
             {(() => {
-              const l = (listaBase || []).find((x) => x.id === menuOpenId);
+              const l = (lancamentos || []).find((x) => x.id === menuOpenId);
               if (!l) return null;
 
               const isParc = !!l.parcelado && !!l.parcela_grupo;
-              const labelPago = l.pago ? "↩️ Desfazer" : (l.tipo === "despesa" ? "Marcar pago" : "Marcar recebido");
 
               return (
-                <>
-                  <button style={menuItemStyle()} role="menuitem" onClick={() => { setMenuOpenId(null); togglePago(l); }}>
-                    ✅ {labelPago}
-                  </button>
-
-                  <button style={menuItemStyle()} role="menuitem" onClick={() => { setMenuOpenId(null); abrirEditar(l); }}>
+                <div style={styles.menuBox} role="menu">
+                  <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); abrirEditar(l); }}>
                     ✏️ Editar
                   </button>
 
                   {isParc ? (
-                    <>
-                      <button style={menuItemStyle()} role="menuitem" onClick={() => { setMenuOpenId(null); abrirEditarGrupo(l); }}>
-                        🧩 Editar grupo
-                      </button>
-
-                      <button style={menuItemStyle({ danger: true })} role="menuitem" onClick={() => { setMenuOpenId(null); excluirGrupo(l); }}>
-                        🧨 Excluir grupo
-                      </button>
-                    </>
+                    <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); abrirEditarGrupo(l); }}>
+                      🧩 Editar grupo
+                    </button>
                   ) : null}
 
-                  <button style={menuItemStyle({ danger: true })} role="menuitem" onClick={() => { setMenuOpenId(null); excluirLanc(l); }}>
+                  <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); togglePago(l); }}>
+                    {l.pago ? "↩️ Marcar como pendente" : "✅ Marcar como pago"}
+                  </button>
+
+                  {isParc ? (
+                    <button
+                      style={menuItemStyle({ danger: true })}
+                      onClick={() => { setMenuOpenId(null); excluirGrupo(l); }}
+                    >
+                      🗑️ Excluir grupo
+                    </button>
+                  ) : null}
+
+                  <button
+                    style={menuItemStyle({ danger: true })}
+                    onClick={() => { setMenuOpenId(null); excluirLanc(l); }}
+                  >
                     🗑️ Excluir
                   </button>
-                </>
+                </div>
               );
             })()}
-          </div>
+          </PortalMenu>
         ) : null}
 
-        {contaMenuOpenId && canWrite ? (
-          <div
-            ref={contaMenuRef}
-            role="menu"
-            aria-label="Menu de ações da conta"
-            style={{ ...styles.menuFixed, top: contaMenuPos.top, left: contaMenuPos.left, width: contaMenuPos.width }}
+        {contaMenuOpenId ? (
+          <PortalMenu
+            anchorEl={contaMenuBtnRefs.get(contaMenuOpenId)}
+            onClose={() => setContaMenuOpenId(null)}
           >
             {(() => {
               const c = (contas || []).find((x) => x.id === contaMenuOpenId);
               if (!c) return null;
 
               return (
-                <>
-                  <button
-                    style={menuItemStyle()}
-                    role="menuitem"
-                    onClick={() => { setContaMenuOpenId(null); abrirEditarConta(c); }}
-                  >
-                    ✏️ Editar conta
+                <div style={styles.menuBox} role="menu">
+                  <button style={menuItemStyle()} onClick={() => { setContaMenuOpenId(null); abrirEditarConta(c); }}>
+                    ✏️ Editar
                   </button>
-
                   <button
                     style={menuItemStyle({ danger: true })}
-                    role="menuitem"
                     onClick={() => { setContaMenuOpenId(null); excluirConta(c); }}
                   >
-                    🗑️ Excluir conta
+                    🗑️ Excluir
                   </button>
-                </>
+                </div>
               );
             })()}
-          </div>
+          </PortalMenu>
         ) : null}
 
-        {fixaMenuOpenId && canWrite ? (
-          <div
-            ref={fixaMenuRef}
-            role="menu"
-            aria-label="Menu de ações da fixa"
-            style={{ ...styles.menuFixed, top: fixaMenuPos.top, left: fixaMenuPos.left, width: fixaMenuPos.width }}
+        {fixaMenuOpenId ? (
+          <PortalMenu
+            anchorEl={fixaMenuBtnRefs.get(fixaMenuOpenId)}
+            onClose={() => setFixaMenuOpenId(null)}
           >
             {(() => {
               const f = (fixas || []).find((x) => x.id === fixaMenuOpenId);
               if (!f) return null;
 
               return (
-                <>
-                  <button
-                    style={menuItemStyle()}
-                    role="menuitem"
-                    onClick={() => { setFixaMenuOpenId(null); abrirEditarFixa(f); }}
-                  >
-                    ✏️ Editar fixa
+                <div style={styles.menuBox} role="menu">
+                  <button style={menuItemStyle()} onClick={() => { setFixaMenuOpenId(null); abrirEditarFixa(f); }}>
+                    ✏️ Editar
                   </button>
-
                   <button
                     style={menuItemStyle({ danger: true })}
-                    role="menuitem"
                     onClick={() => { setFixaMenuOpenId(null); excluirFixa(f); }}
                   >
-                    🗑️ Excluir fixa
+                    🗑️ Excluir
                   </button>
-                </>
+                </div>
               );
             })()}
-          </div>
+          </PortalMenu>
         ) : null}
 
+        {/* MODAIS — corrigidos para MOBILE: header fixo + scroll interno + safe-area */}
+        {editOpen ? (
+          <Modal title="Editar lançamento" onClose={fecharEditar}>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={styles.modalGrid}>
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Data</span>
+                  <input type="date" value={editData || ""} onChange={(e) => setEditData(e.target.value)} style={styles.input} />
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Valor</span>
+                  <input value={editValor} onChange={(e) => setEditValor(e.target.value)} style={styles.input} />
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Tipo</span>
+                  <select
+                    value={editTipo}
+                    onChange={(e) => {
+                      const t = e.target.value;
+                      setEditTipo(t);
+                      const cats = t === "despesa" ? categoriasDespesa : categoriasReceita;
+                      if (!cats.includes(editCategoria)) setEditCategoria(cats[0] || "Outros");
+                    }}
+                    style={styles.select}
+                  >
+                    <option value="despesa">Despesa</option>
+                    <option value="receita">Receita</option>
+                  </select>
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Categoria</span>
+                  <select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} style={styles.select}>
+                    {(categoriasEdit || []).map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+                  <span style={styles.labelTxt}>Descrição</span>
+                  <input value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} style={styles.input} />
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Conta</span>
+                  <select value={editLancContaId || ""} onChange={(e) => setEditLancContaId(e.target.value || null)} style={styles.select}>
+                    <option value="">Sem conta</option>
+                    {contas.map((c) => (
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))}
+                  </select>
+                </label>
+
+                {editIsParcelado ? (
+                  <div style={{ ...styles.badgeLight, gridColumn: "1 / -1" }}>
+                    Parcelado: {editParcelaNum}/{editParcelaTotal} (editar aqui altera apenas esta parcela)
+                  </div>
+                ) : null}
+              </div>
+
+              <div style={styles.modalFooterSticky}>
+                <button onClick={fecharEditar} style={styles.secondaryBtn}>Cancelar</button>
+                <button onClick={salvarEdicao} style={styles.primaryBtn} disabled={!canWrite}>✅ Salvar</button>
+              </div>
+
+              {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
+            </div>
+          </Modal>
+        ) : null}
+
+        {editGroupOpen ? (
+          <Modal title="Editar grupo (parcelas)" onClose={fecharEditarGrupo}>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={styles.modalGrid}>
+                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+                  <span style={styles.labelTxt}>Descrição base</span>
+                  <input value={grpDescricaoBase} onChange={(e) => setGrpDescricaoBase(e.target.value)} style={styles.input} />
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Tipo</span>
+                  <select
+                    value={grpTipo}
+                    onChange={(e) => {
+                      const t = e.target.value;
+                      setGrpTipo(t);
+                      const cats = t === "despesa" ? categoriasDespesa : categoriasReceita;
+                      if (!cats.includes(grpCategoria)) setGrpCategoria(cats[0] || "Outros");
+                    }}
+                    style={styles.select}
+                  >
+                    <option value="despesa">Despesa</option>
+                    <option value="receita">Receita</option>
+                  </select>
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Categoria</span>
+                  <select value={grpCategoria} onChange={(e) => setGrpCategoria(e.target.value)} style={styles.select}>
+                    {(categoriasGrupo || []).map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Conta</span>
+                  <select value={grpContaId || ""} onChange={(e) => setGrpContaId(e.target.value || null)} style={styles.select}>
+                    <option value="">Sem conta</option>
+                    {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </select>
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Modo</span>
+                  <select value={grpModo} onChange={(e) => setGrpModo(e.target.value)} style={styles.select}>
+                    <option value="parcela">Valor por parcela</option>
+                    <option value="dividir">Dividir total</option>
+                  </select>
+                </label>
+
+                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+                  <span style={styles.labelTxt}>{grpModo === "dividir" ? "Valor total" : "Valor por parcela"}</span>
+                  <input value={grpValor} onChange={(e) => setGrpValor(e.target.value)} style={styles.input} />
+                </label>
+              </div>
+
+              <div style={styles.modalFooterSticky}>
+                <button onClick={fecharEditarGrupo} style={styles.secondaryBtn}>Cancelar</button>
+                <button onClick={salvarEdicaoGrupo} style={styles.primaryBtn} disabled={!canWrite}>✅ Salvar grupo</button>
+              </div>
+
+              {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
+            </div>
+          </Modal>
+        ) : null}
+
+        {editContaOpen ? (
+          <Modal title="Editar conta" onClose={fecharEditarConta}>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={styles.modalGrid}>
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Nome</span>
+                  <input value={editContaNome} onChange={(e) => setEditContaNome(e.target.value)} style={styles.input} />
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Tipo</span>
+                  <select value={editContaTipo} onChange={(e) => setEditContaTipo(e.target.value)} style={styles.select}>
+                    <option value="corrente">Conta corrente</option>
+                    <option value="poupanca">Poupança</option>
+                    <option value="cartao">Cartão</option>
+                    <option value="invest">Investimentos</option>
+                    <option value="outros">Outros</option>
+                  </select>
+                </label>
+
+                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+                  <span style={styles.labelTxt}>Saldo inicial</span>
+                  <input value={editContaSaldo} onChange={(e) => setEditContaSaldo(e.target.value)} style={styles.input} />
+                </label>
+              </div>
+
+              <div style={styles.modalFooterSticky}>
+                <button onClick={fecharEditarConta} style={styles.secondaryBtn}>Cancelar</button>
+                <button onClick={salvarEdicaoConta} style={styles.primaryBtn} disabled={!canWrite}>✅ Salvar</button>
+              </div>
+
+              {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
+            </div>
+          </Modal>
+        ) : null}
+
+        {editFixaOpen ? (
+          <Modal title="Editar fixa" onClose={fecharEditarFixa}>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={styles.modalGrid}>
+                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+                  <span style={styles.labelTxt}>Descrição</span>
+                  <input value={editFixaDescricao} onChange={(e) => setEditFixaDescricao(e.target.value)} style={styles.input} />
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Valor</span>
+                  <input value={editFixaValor} onChange={(e) => setEditFixaValor(e.target.value)} style={styles.input} />
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Tipo</span>
+                  <select value={editFixaTipo} onChange={(e) => setEditFixaTipo(e.target.value)} style={styles.select}>
+                    <option value="despesa">Despesa</option>
+                    <option value="receita">Receita</option>
+                  </select>
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Categoria</span>
+                  <select value={editFixaCategoria} onChange={(e) => setEditFixaCategoria(e.target.value)} style={styles.select}>
+                    {(categoriasFixaEdit || []).map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Dia venc.</span>
+                  <input value={editFixaDia} onChange={(e) => setEditFixaDia(e.target.value)} style={styles.input} inputMode="numeric" />
+                </label>
+
+                <label style={styles.label}>
+                  <span style={styles.labelTxt}>Conta</span>
+                  <select value={editFixaContaId || ""} onChange={(e) => setEditFixaContaId(e.target.value || null)} style={styles.select}>
+                    <option value="">Sem conta</option>
+                    {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </select>
+                </label>
+              </div>
+
+              <div style={styles.modalFooterSticky}>
+                <button onClick={fecharEditarFixa} style={styles.secondaryBtn}>Cancelar</button>
+                <button onClick={salvarEdicaoFixa} style={styles.primaryBtn} disabled={!canWrite}>✅ Salvar</button>
+              </div>
+
+              {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
+            </div>
+          </Modal>
+        ) : null}
       </div>
     </div>
   );
 }
 
-/* =========================
-   ESTILOS + CSS GLOBAL
-   ========================= */
+/* ---------------------------
+   PortalMenu (menus ⋮ mobile-safe)
+---------------------------- */
+function PortalMenu({ anchorEl, children, onClose }) {
+  const [pos, setPos] = useState(null);
 
+  useEffect(() => {
+    function calc() {
+      if (!anchorEl) return setPos(null);
+      const r = anchorEl.getBoundingClientRect();
+      const vw = window.innerWidth || 360;
+      const vh = window.innerHeight || 640;
+
+      const desiredW = 260;
+      const x = Math.min(vw - desiredW - 10, Math.max(10, r.right - desiredW));
+      const y = Math.min(vh - 10, Math.max(10, r.bottom + 8));
+
+      setPos({ x, y, w: desiredW });
+    }
+
+    calc();
+    window.addEventListener("resize", calc);
+    window.addEventListener("scroll", calc, true);
+    return () => {
+      window.removeEventListener("resize", calc);
+      window.removeEventListener("scroll", calc, true);
+    };
+  }, [anchorEl]);
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") onClose?.();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  if (!pos) return null;
+
+  return (
+    <div
+      style={styles.menuOverlay}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div style={{ ...styles.menuFloating, left: pos.x, top: pos.y, width: pos.w }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------
+   Styles (inclui MODAL MOBILE FIX)
+---------------------------- */
 const styles = {
-  page: {
-    minHeight: "100dvh",
-    width: "100%",
-    maxWidth: "100%",
-    background: "var(--bg)",
-    color: "var(--text)",
-    padding: "clamp(10px, 1.8vw, 18px)",
-    overflowX: "clip",
-  },
-  container: {
-    width: "100%",
-    maxWidth: "100%",
-    margin: 0,
-    display: "grid",
-    gap: 12,
-  },
+  page: { padding: 12, color: "var(--text)" },
+  container: { maxWidth: 1180, margin: "0 auto" },
+
   header: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
-    alignItems: "flex-start",
     flexWrap: "wrap",
+    alignItems: "flex-start",
+    marginBottom: 10,
   },
-  grid2: {
+
+  gridTop: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 10,
   },
+
   card: {
     border: "1px solid var(--border)",
     background: "var(--card)",
     borderRadius: 16,
-    padding: 14,
-    boxShadow: "var(--shadow)",
-  },
-  card2: {
-    border: "1px solid var(--border)",
-    background: "var(--card2)",
-    borderRadius: 16,
+    padding: 12,
     boxShadow: "var(--shadowSoft)",
   },
-  cardTitle: { fontWeight: 1000, color: "var(--muted)", fontSize: 13, letterSpacing: -0.1 },
-  bigNumber: { fontSize: 26, fontWeight: 1100, letterSpacing: -0.35, marginTop: 6 },
-  mutedLine: { marginTop: 6, color: "var(--muted)", fontWeight: 900, fontSize: 13 },
 
-  badgeMuted: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "3px 8px",
-    borderRadius: 999,
+  row: {
     border: "1px solid var(--border)",
-    background: "var(--chipBg)",
-    color: "var(--muted)",
-    fontWeight: 1000,
-    fontSize: 11,
-    lineHeight: 1,
-  },
-
-  badgeMonthYear: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "2px 8px",
-    borderRadius: 999,
-    border: "1px solid var(--border)",
-    background: "var(--chipBg)",
-    color: "var(--muted)",
-    fontWeight: 1000,
-    fontSize: 10.5,
-    lineHeight: 1,
-    letterSpacing: -0.1,
-  },
-
-  formRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    background: "var(--card)",
+    borderRadius: 16,
+    padding: 12,
+    boxShadow: "var(--shadowSoft)",
+    display: "flex",
+    justifyContent: "space-between",
     gap: 10,
     alignItems: "center",
   },
-  label: {
-    display: "grid",
-    gap: 6,
-    fontWeight: 1000,
-    color: "var(--muted)",
-    fontSize: 12,
-  },
+
+  formRow: { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" },
+
+  kpiLabel: { color: "var(--muted)", fontWeight: 1000, fontSize: 12 },
+  kpiValue: { marginTop: 6, fontWeight: 1100, fontSize: 26, letterSpacing: -0.4 },
+  kpiHint: { marginTop: 6, color: "var(--muted)", fontWeight: 900, fontSize: 12 },
+
+  label: { display: "grid", gap: 6 },
+  labelTxt: { fontSize: 12, fontWeight: 950, color: "var(--muted)" },
+
   input: {
     border: "1px solid var(--border)",
     background: "var(--controlBg)",
@@ -2584,10 +2502,11 @@ const styles = {
     borderRadius: 12,
     padding: "10px 12px",
     outline: "none",
-    width: "100%",
-    minWidth: 0,
     fontWeight: 900,
+    width: "100%",
+    boxSizing: "border-box",
   },
+
   select: {
     border: "1px solid var(--border)",
     background: "var(--controlBg)",
@@ -2595,8 +2514,6 @@ const styles = {
     borderRadius: 12,
     padding: "10px 12px",
     outline: "none",
-    width: "100%",
-    minWidth: 0,
     fontWeight: 900,
   },
 
@@ -2605,274 +2522,244 @@ const styles = {
     background: "var(--controlBg)",
     color: "var(--text)",
     borderRadius: 12,
-    padding: "7px 10px",
+    padding: "10px 10px",
     outline: "none",
-    width: "fit-content",
-    minWidth: 0,
     fontWeight: 900,
-    fontSize: 13,
-    lineHeight: 1.1,
-  },
-
-  primaryBtn: {
-    border: "1px solid rgba(59,130,246,.45)",
-    background: "rgba(59,130,246,.16)",
-    color: "var(--text)",
-    borderRadius: 12,
-    padding: "10px 12px",
-    fontWeight: 1100,
-    cursor: "pointer",
-    width: "fit-content",
-    justifySelf: "start",
-  },
-  secondaryBtn: {
-    border: "1px solid var(--border)",
-    background: "var(--controlBg2)",
-    color: "var(--text)",
-    borderRadius: 12,
-    padding: "10px 12px",
-    fontWeight: 1000,
-    cursor: "pointer",
-    width: "fit-content",
-    justifySelf: "start",
-  },
-  iconButton: {
-    border: "1px solid var(--border)",
-    background: "var(--controlBg2)",
-    color: "var(--text)",
-    borderRadius: 12,
-    padding: "8px 10px",
-    fontWeight: 1000,
-    cursor: "pointer",
-    width: "fit-content",
-    justifySelf: "start",
   },
 
   iconButtonCompact: {
     border: "1px solid var(--border)",
-    background: "var(--controlBg2)",
+    background: "var(--controlBg)",
     color: "var(--text)",
     borderRadius: 12,
-    padding: "6px 8px",
-    fontWeight: 1000,
+    padding: "10px 10px",
     cursor: "pointer",
-    width: "fit-content",
-    justifySelf: "start",
-    fontSize: 13,
+    fontWeight: 1000,
+  },
+
+  primaryBtn: {
+    border: "1px solid var(--tabActiveBorder)",
+    background: "var(--tabActiveBg)",
+    color: "var(--text)",
+    padding: "10px 12px",
+    borderRadius: 12,
+    cursor: "pointer",
+    fontWeight: 1000,
+  },
+
+  secondaryBtn: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    padding: "10px 12px",
+    borderRadius: 12,
+    cursor: "pointer",
+    fontWeight: 1000,
+  },
+
+  iconButton: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    padding: "10px 12px",
+    borderRadius: 12,
+    cursor: "pointer",
+    fontWeight: 1100,
     lineHeight: 1,
   },
 
-  chip: {
+  badgeMonthYear: {
     border: "1px solid var(--border)",
+    background: "var(--card2)",
     borderRadius: 999,
-    padding: "8px 12px",
-    fontWeight: 1100,
-    cursor: "pointer",
-    transition: "transform .06s ease",
-  },
-  row: {
-    border: "1px solid var(--border)",
-    borderRadius: 16,
-    padding: 12,
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    overflow: "hidden",
-  },
-  menuFixed: {
-    position: "fixed",
-    zIndex: 9999,
-    border: "1px solid var(--border)",
-    borderRadius: 14,
-    background: "var(--card)",
-    padding: 10,
-    boxShadow: "var(--shadow)",
-    display: "grid",
-    gap: 8,
-    maxWidth: "min(92vw, 280px)",
-    maxHeight: "min(60vh, 320px)",
-    overflowY: "auto",
-    overscrollBehavior: "contain",
-    WebkitOverflowScrolling: "touch",
-  },
-  pendente: { color: "var(--warn)", fontWeight: 1100 },
-  pago: { color: "var(--ok)", fontWeight: 1100 },
-  pillType: (tipo) => ({
     padding: "4px 10px",
-    borderRadius: 999,
-    border: "1px solid var(--border)",
-    background: tipo === "receita" ? "rgba(34,197,94,.12)" : "rgba(239,68,68,.10)",
-    color: tipo === "receita" ? "rgba(34,197,94,1)" : "rgba(239,68,68,1)",
-    fontWeight: 1100,
-    fontSize: 12,
-  }),
-  alertPill: (kind) => {
-    const base = {
-      padding: "6px 10px",
-      borderRadius: 999,
-      border: "1px solid var(--border)",
-      fontWeight: 1100,
-      fontSize: 12,
-      background: "var(--chipBg)",
-      color: "var(--text)",
-    };
-    if (kind === "danger") return { ...base, borderColor: "rgba(239,68,68,.55)", background: "rgba(239,68,68,.10)" };
-    if (kind === "warn") return { ...base, borderColor: "rgba(245,158,11,.55)", background: "rgba(245,158,11,.10)" };
-    if (kind === "info") return { ...base, borderColor: "rgba(56,189,248,.55)", background: "rgba(56,189,248,.10)" };
-    return base;
-  },
-  collapseHeaderBtn: {
-    width: "100%",
-    border: "1px solid var(--border)",
-    background: "var(--card)",
+    fontWeight: 1000,
     color: "var(--text)",
-    borderRadius: 16,
-    padding: "12px 12px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    cursor: "pointer",
-    boxShadow: "var(--shadowSoft)",
+    fontSize: 12,
   },
-  collapseChevron: { fontSize: 16, fontWeight: 1100, opacity: 0.9 },
-  collapseBody: {
-    overflow: "hidden",
-    transition: "all .18s ease",
+
+  badgeLight: {
+    border: "1px solid var(--border)",
+    background: "var(--card2)",
+    borderRadius: 999,
+    padding: "4px 10px",
+    fontWeight: 1000,
+    fontSize: 12,
+    color: "var(--text)",
   },
+
+  lockInline: {
+    color: "var(--muted)",
+    fontWeight: 900,
+    fontSize: 12,
+  },
+
+  lockNote: {
+    border: "1px solid rgba(239,68,68,.35)",
+    background: "rgba(239,68,68,.08)",
+    padding: "10px 12px",
+    borderRadius: 12,
+    fontWeight: 1000,
+    color: "var(--text)",
+  },
+
   checkLabel: {
     display: "flex",
     gap: 8,
     alignItems: "center",
+    color: "var(--muted)",
     fontWeight: 1000,
-    color: "var(--text)",
+    userSelect: "none",
   },
+
+  chip: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    padding: "8px 12px",
+    borderRadius: 999,
+    cursor: "pointer",
+    fontWeight: 1000,
+    fontSize: 12,
+  },
+
+  chipActive: {
+    borderColor: "var(--tabActiveBorder)",
+    background: "var(--tabActiveBg)",
+  },
+
+  pendente: { color: "rgba(245,158,11,1)", fontWeight: 1000, fontSize: 12 },
+  pago: { color: "rgba(34,197,94,1)", fontWeight: 1000, fontSize: 12 },
+
+  pillType: (tipo) => ({
+    padding: "2px 10px",
+    borderRadius: 999,
+    border: "1px solid var(--border)",
+    background: tipo === "receita" ? "rgba(34,197,94,.10)" : "rgba(239,68,68,.08)",
+    color: "var(--text)",
+    fontWeight: 1100,
+    fontSize: 12,
+  }),
+
+  alertPill: (kind) => {
+    const map = {
+      danger: { bg: "rgba(239,68,68,.10)", bd: "rgba(239,68,68,.35)" },
+      warn: { bg: "rgba(245,158,11,.10)", bd: "rgba(245,158,11,.35)" },
+      info: { bg: "rgba(59,130,246,.10)", bd: "rgba(59,130,246,.35)" },
+      muted: { bg: "rgba(255,255,255,.06)", bd: "rgba(255,255,255,.12)" },
+    };
+    const c = map[kind] || map.muted;
+    return {
+      border: `1px solid ${c.bd}`,
+      background: c.bg,
+      color: "var(--text)",
+      borderRadius: 999,
+      padding: "6px 10px",
+      fontWeight: 1000,
+      fontSize: 12,
+    };
+  },
+
+  /* MENU */
+  menuOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "transparent",
+    zIndex: 60,
+  },
+  menuFloating: {
+    position: "fixed",
+    borderRadius: 16,
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    boxShadow: "0 18px 50px rgba(0,0,0,.30)",
+    padding: 10,
+    maxHeight: "min(60vh, 460px)",
+    overflow: "auto",
+    WebkitOverflowScrolling: "touch",
+  },
+  menuBox: { display: "grid", gap: 8 },
+
+  /* MODAL — FIX MOBILE */
   modalOverlay: {
     position: "fixed",
     inset: 0,
     background: "rgba(0,0,0,.55)",
-    display: "grid",
-    placeItems: "center",
-    zIndex: 50,
-    padding: 14,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding:
+      "max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))",
+    zIndex: 70,
   },
+
   modalCard: {
-    width: "min(680px, 96vw)",
-    maxHeight: "min(86dvh, 720px)",
+    width: "min(920px, 100%)",
+    maxHeight: "min(90dvh, 720px)",
     borderRadius: 18,
     border: "1px solid var(--border)",
     background: "var(--card)",
-    boxShadow: "0 25px 80px rgba(0,0,0,.35)",
+    color: "var(--text)",
+    boxShadow: "0 18px 40px rgba(0,0,0,.28)",
+    display: "grid",
+    gridTemplateRows: "auto 1fr",
     overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
   },
+
   modalHeaderSticky: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
-    padding: 14,
-    borderBottom: "1px solid var(--border)",
-    background: "var(--card)",
     position: "sticky",
     top: 0,
-    zIndex: 1,
+    zIndex: 2,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: "12px 12px",
+    borderBottom: "1px solid var(--border)",
+    background: "var(--card)",
   },
+
   modalBodyScroll: {
-    padding: 14,
-    overflowY: "auto",
+    padding: 12,
+    overflow: "auto",
     WebkitOverflowScrolling: "touch",
-    overscrollBehavior: "contain",
+    minHeight: 0,
+  },
+
+  modalGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  modalFooterSticky: {
+    position: "sticky",
+    bottom: 0,
+    zIndex: 2,
+    padding: 12,
+    display: "flex",
+    gap: 10,
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    borderTop: "1px solid var(--border)",
+    background: "var(--card)",
   },
 };
 
+/* ---------------------------
+   CSS Global (responsivo + modal grid mobile)
+---------------------------- */
 function globalCss() {
   return `
-:root{
-  --bg:#0b1220;
-  --text:#e5e7eb;
-  --muted:#a1a1aa;
-  --border:rgba(148,163,184,.18);
-  --card:rgba(255,255,255,.04);
-  --card2:rgba(255,255,255,.03);
-  --controlBg:rgba(255,255,255,.06);
-  --controlBg2:rgba(255,255,255,.04);
-  --shadow:0 18px 40px rgba(0,0,0,.22);
-  --shadowSoft:0 12px 28px rgba(0,0,0,.16);
-  --ok:rgb(34,197,94);
-  --warn:rgb(245,158,11);
-  --danger:rgb(239,68,68);
-  --chipBg:rgba(255,255,255,.04);
-  --chipOnBg:rgba(59,130,246,.18);
-  --chipOnBorder:rgba(59,130,246,.55);
-  --chipOnText:#e5e7eb;
-}
+    @media (max-width: 720px){
+      .gfd-hide-mobile { display: none !important; }
+    }
 
-html, body, #root {
-  min-height: 100%;
-  width: 100%;
-  max-width: 100%;
-  background: var(--bg);
-}
-
-body{
-  margin:0;
-  overflow-x: clip;
-}
-
-@supports not (overflow: clip){
-  body{ overflow-x: hidden; }
-}
-
-html.light, body.light, #root.light{
-  --bg:#f6f7fb;
-  --text:#0f172a;
-  --muted:#64748b;
-  --border:rgba(15,23,42,.12);
-  --card:#ffffff;
-  --card2:#fbfcff;
-  --controlBg:#ffffff;
-  --controlBg2:#f3f4f6;
-  --shadow:0 18px 40px rgba(2,6,23,.08);
-  --shadowSoft:0 12px 28px rgba(2,6,23,.06);
-  --chipBg:#ffffff;
-  --chipOnBg:rgba(59,130,246,.12);
-  --chipOnBorder:rgba(59,130,246,.35);
-  --chipOnText:#0f172a;
-}
-
-@media (prefers-color-scheme: light){
-  html:not(.dark):not(.force-dark) :root,
-  :root:not(.dark):not(.force-dark){
-    --bg:#f6f7fb;
-    --text:#0f172a;
-    --muted:#64748b;
-    --border:rgba(15,23,42,.12);
-    --card:#ffffff;
-    --card2:#fbfcff;
-    --controlBg:#ffffff;
-    --controlBg2:#f3f4f6;
-    --shadow:0 18px 40px rgba(2,6,23,.08);
-    --shadowSoft:0 12px 28px rgba(2,6,23,.06);
-    --chipBg:#ffffff;
-    --chipOnBg:rgba(59,130,246,.12);
-    --chipOnBorder:rgba(59,130,246,.35);
-    --chipOnText:#0f172a;
-  }
-}
-
-*{ box-sizing:border-box; }
-button:active{ transform: translateY(1px); }
-input,select,button{ font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial; }
-
-.gfd-grid2{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:12px;
-}
-@media (max-width: 820px){
-  .gfd-grid2{ grid-template-columns: 1fr; }
-}
-`;
+    @media (max-width: 640px){
+      /* modal grid vira 1 coluna no celular */
+      [style*="grid-template-columns: repeat(2"]{
+        grid-template-columns: 1fr !important;
+      }
+    }
+  `;
 }
