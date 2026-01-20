@@ -1,7 +1,3 @@
-// =========================
-// DASHBOARD.jsx — PART 1/2
-// =========================
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 
@@ -88,8 +84,7 @@ function vencimentoInfo(l) {
   return null;
 }
 
-// ✅ FIX DO “VOLTA 1 DIA” (UI): nunca use new Date("YYYY-MM-DD").
-// Formata a string YYYY-MM-DD em pt-BR usando Date local.
+// ✅ sem new Date("YYYY-MM-DD") (evita -1 dia)
 function formatBRfromYmd(ymdStr) {
   if (!ymdStr) return "";
   const [y, m, d] = String(ymdStr).split("-").map(Number);
@@ -195,8 +190,8 @@ function CollapseSection({ id, title, subtitle, open, onToggle, children, rightS
   );
 }
 
-// ✅ agora recebe canWrite do App.jsx
-export default function Dashboard({ canWrite = true } = {}) {
+// ✅ recebe canWrite do App.jsx (sem default "true" para não liberar por engano)
+export default function Dashboard({ canWrite } = {}) {
   // ✅ trava central (modo leitura)
   function guardWrite(msg = "Assinatura inativa. Você está no modo leitura.") {
     if (canWrite) return true;
@@ -867,7 +862,7 @@ export default function Dashboard({ canWrite = true } = {}) {
     if (!parcelado) {
       const { error } = await supabase.from("lancamentos").insert({
         conta_id: contaEscolhida,
-        data, // ✅ mantém string YYYY-MM-DD
+        data,
         mes_ano: String(data).slice(0, 7),
         valor: vInformado,
         descricao: desc,
@@ -887,7 +882,6 @@ export default function Dashboard({ canWrite = true } = {}) {
       await carregarLancamentos();
       return;
     }
-
     const n = Math.max(2, Math.min(120, Number(qtdParcelas || 2)));
     const grupo = uuidLike();
 
@@ -1033,7 +1027,7 @@ export default function Dashboard({ canWrite = true } = {}) {
     const { error } = await supabase
       .from("lancamentos")
       .update({
-        data: editData, // ✅ mantém string YYYY-MM-DD
+        data: editData,
         mes_ano: mesAnoNovo,
         valor: v,
         descricao: (editDescricao || "").trim(),
@@ -1362,8 +1356,6 @@ export default function Dashboard({ canWrite = true } = {}) {
   }, [listaBase]);
 
   function exportarCsv() {
-    // ✅ modo leitura pode exportar? Você pediu "só olha".
-    // Então: vamos bloquear export também.
     if (!guardWrite("Assinatura inativa. Exportação está indisponível no modo leitura.")) return;
 
     const rows = listaChips || [];
@@ -1406,11 +1398,13 @@ export default function Dashboard({ canWrite = true } = {}) {
         onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
       >
         <div style={styles.modalCard}>
-          <div style={styles.modalHeader}>
+          <div style={styles.modalHeaderSticky}>
             <div style={{ fontWeight: 1000 }}>{title}</div>
             <button onClick={onClose} style={styles.iconButton} aria-label="Fechar modal">✖️</button>
           </div>
-          <div style={{ marginTop: 10 }}>{children}</div>
+          <div style={styles.modalBodyScroll}>
+            {children}
+          </div>
         </div>
       </div>
     );
@@ -1439,7 +1433,6 @@ export default function Dashboard({ canWrite = true } = {}) {
           dias.map((dia) => (
             <div key={dia} style={{ marginTop: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                {/* ✅ CORRIGIDO: sem new Date("YYYY-MM-DD") (evita -1 dia) */}
                 <h4 style={{ margin: "6px 0" }}>{formatBRfromYmd(dia)}</h4>
                 <span style={{ color: "var(--muted)", fontSize: 12, fontWeight: 900 }}>
                   {mapPorDia[dia].length} item(ns)
@@ -1560,7 +1553,6 @@ export default function Dashboard({ canWrite = true } = {}) {
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <h2 style={{ margin: 0, letterSpacing: -0.2 }}>Dashboard</h2>
 
-              {/* ✅ MÊS/ANO: agora menor e proporcional */}
               <span style={styles.badgeMonthYear}>{meses[mes]} • {ano}</span>
 
               {!canWrite ? (
@@ -1651,10 +1643,8 @@ export default function Dashboard({ canWrite = true } = {}) {
 
         <div style={{ ...styles.card, padding: 12 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            {/* ✅ botões compactos */}
             <button onClick={mesAnterior} style={styles.iconButtonCompact} aria-label="Mês anterior" title="Mês anterior">⬅️</button>
 
-            {/* ✅ selects compactos (MÊS/ANO) */}
             <select value={mes} onChange={(e) => setMes(Number(e.target.value))} style={styles.selectCompact} aria-label="Selecionar mês">
               {meses.map((m, i) => <option key={i} value={i}>{m}</option>)}
             </select>
@@ -1838,7 +1828,7 @@ export default function Dashboard({ canWrite = true } = {}) {
                     />
                   </label>
 
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
                     <button onClick={fecharEditarConta} style={styles.secondaryBtn}>Cancelar</button>
                     <button onClick={salvarEdicaoConta} style={styles.primaryBtn} disabled={!canWrite}>Salvar</button>
                   </div>
@@ -1852,11 +1842,9 @@ export default function Dashboard({ canWrite = true } = {}) {
           </CollapseSection>
         ) : (
           <CollapseSection id="contas_closed" title="Contas" subtitle="recolhido" open={false} onToggle={() => setUiShowContas(true)}>
-            {/* vazio */}
+            <div />
           </CollapseSection>
         )}
-
-        {/* CONTINUA NA PART 2/2: Fixas, Novo, Lista, Menus fixed, Styles + globalCss */}
 
         {uiShowFixas ? (
           <CollapseSection
@@ -2063,7 +2051,7 @@ export default function Dashboard({ canWrite = true } = {}) {
                     </select>
                   </label>
 
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
                     <button onClick={fecharEditarFixa} style={styles.secondaryBtn}>Cancelar</button>
                     <button onClick={salvarEdicaoFixa} style={styles.primaryBtn} disabled={!canWrite}>Salvar</button>
                   </div>
@@ -2073,7 +2061,7 @@ export default function Dashboard({ canWrite = true } = {}) {
           </CollapseSection>
         ) : (
           <CollapseSection id="fixas_closed" title="Fixas recorrentes" subtitle="recolhido" open={false} onToggle={() => setUiShowFixas(true)}>
-            {/* vazio */}
+            <div />
           </CollapseSection>
         )}
 
@@ -2166,7 +2154,7 @@ export default function Dashboard({ canWrite = true } = {}) {
           </CollapseSection>
         ) : (
           <CollapseSection id="novo_closed" title="Novo lançamento" subtitle="recolhido" open={false} onToggle={() => setUiShowNovo(true)}>
-            {/* vazio */}
+            <div />
           </CollapseSection>
         )}
 
@@ -2301,7 +2289,7 @@ export default function Dashboard({ canWrite = true } = {}) {
                     </div>
                   ) : null}
 
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
                     <button onClick={fecharEditar} style={styles.secondaryBtn}>Cancelar</button>
                     <button onClick={salvarEdicao} style={styles.primaryBtn} disabled={!canWrite}>Salvar</button>
                   </div>
@@ -2365,7 +2353,7 @@ export default function Dashboard({ canWrite = true } = {}) {
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
                     <button onClick={fecharEditarGrupo} style={styles.secondaryBtn}>Cancelar</button>
                     <button onClick={salvarEdicaoGrupo} style={styles.primaryBtn} disabled={!canWrite}>Salvar grupo</button>
                   </div>
@@ -2375,12 +2363,10 @@ export default function Dashboard({ canWrite = true } = {}) {
           </CollapseSection>
         ) : (
           <CollapseSection id="lista_closed" title="Lista" subtitle="recolhido" open={false} onToggle={() => setUiShowLista(true)}>
-            {/* vazio */}
+            <div />
           </CollapseSection>
         )}
 
-        {/* ✅ Menus: no modo leitura eles nem abrem (toggleMenu/toggleContaMenu/toggleFixaMenu já barram).
-            Mas se abrir por algum bug, ainda assim não renderizamos ações de escrita. */}
         {menuOpenId && canWrite ? (
           <div
             ref={menuBoxRef}
@@ -2692,6 +2678,7 @@ const styles = {
     justifyContent: "space-between",
     gap: 12,
     alignItems: "center",
+    overflow: "hidden",
   },
   menuFixed: {
     position: "fixed",
@@ -2703,6 +2690,11 @@ const styles = {
     boxShadow: "var(--shadow)",
     display: "grid",
     gap: 8,
+    maxWidth: "min(92vw, 280px)",
+    maxHeight: "min(60vh, 320px)",
+    overflowY: "auto",
+    overscrollBehavior: "contain",
+    WebkitOverflowScrolling: "touch",
   },
   pendente: { color: "var(--warn)", fontWeight: 1100 },
   pago: { color: "var(--ok)", fontWeight: 1100 },
@@ -2766,17 +2758,32 @@ const styles = {
   },
   modalCard: {
     width: "min(680px, 96vw)",
+    maxHeight: "min(86dvh, 720px)",
     borderRadius: 18,
     border: "1px solid var(--border)",
     background: "var(--card)",
-    padding: 14,
     boxShadow: "0 25px 80px rgba(0,0,0,.35)",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
   },
-  modalHeader: {
+  modalHeaderSticky: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 10,
+    padding: 14,
+    borderBottom: "1px solid var(--border)",
+    background: "var(--card)",
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+  },
+  modalBodyScroll: {
+    padding: 14,
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+    overscrollBehavior: "contain",
   },
 };
 

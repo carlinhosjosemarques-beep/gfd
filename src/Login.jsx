@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
 
+const KIWIFY_CHECKOUT_URL = "https://pay.kiwify.com.br/78zK1pJ";
+
 export default function Login({ theme, setTheme }) {
   const [mode, setMode] = useState("login"); // login | signup
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
+
+  // ✅ para “Criar conta e assinar”
+  const [signupThenCheckout, setSignupThenCheckout] = useState(false);
 
   const dark = theme === "dark";
 
@@ -36,6 +41,15 @@ export default function Login({ theme, setTheme }) {
     return err?.message || "Erro ao autenticar. Tente novamente.";
   }
 
+  function openCheckout(userEmail) {
+    const em = String(userEmail || "").trim().toLowerCase();
+    const url = em
+      ? `${KIWIFY_CHECKOUT_URL}${KIWIFY_CHECKOUT_URL.includes("?") ? "&" : "?"}email=${encodeURIComponent(em)}`
+      : KIWIFY_CHECKOUT_URL;
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setMsg(null);
@@ -53,32 +67,36 @@ export default function Login({ theme, setTheme }) {
         });
         if (error) throw error;
       } else {
-        const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+        const origin = typeof window !== "undefined" ? window.location.origin : undefined;
+        const redirectTo = origin ? `${origin}/` : undefined;
 
         const { data, error } = await supabase.auth.signUp({
           email: em,
           password: pw,
           options: {
-            // ✅ importante para produção (Vercel/Domínio)
+            // ✅ volta para o app (evita ir parar em página do Supabase)
             emailRedirectTo: redirectTo,
           },
         });
 
         if (error) throw error;
 
-        // Se confirmação de e-mail estiver ativa, session pode vir null.
-        // Mesmo assim, conta foi criada com sucesso.
         const needsConfirm = !data?.session;
 
         setSenha("");
         setMsg(
           needsConfirm
-            ? "Conta criada! Agora confirme pelo e-mail enviado (veja também o spam). Depois volte e faça login."
+            ? "Conta criada! Agora confirme pelo e-mail enviado (veja também o spam). Depois volte e faça login. Se você for assinar, use o MESMO e-mail no checkout."
             : "Conta criada com sucesso! Entrando…"
         );
 
-        // Se já logou automaticamente, troca para login só por UX
         setMode("login");
+
+        // ✅ Se clicou em “Criar conta e assinar”, abre o checkout já
+        if (signupThenCheckout) {
+          setSignupThenCheckout(false);
+          openCheckout(em);
+        }
       }
     } catch (err) {
       setMsg(friendlyAuthError(err));
@@ -94,7 +112,8 @@ export default function Login({ theme, setTheme }) {
     setLoading(true);
     setMsg(null);
     try {
-      const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+      const origin = typeof window !== "undefined" ? window.location.origin : undefined;
+      const redirectTo = origin ? `${origin}/` : undefined;
 
       const { error } = await supabase.auth.resetPasswordForEmail(em, {
         redirectTo,
@@ -136,6 +155,26 @@ export default function Login({ theme, setTheme }) {
               <span style={styles.badge}>🧩 Parcelas</span>
               <span style={styles.badge}>📊 Relatórios</span>
               <span style={styles.badge}>🔒 Por usuário</span>
+            </div>
+
+            <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => openCheckout(email)}
+                style={{
+                  ...styles.primaryBtn,
+                  width: "auto",
+                  padding: "12px 14px",
+                  fontWeight: 1000,
+                }}
+                title="Abrir assinatura"
+              >
+                ✨ Assinar agora
+              </button>
+
+              <div style={{ color: "var(--muted)", fontWeight: 800, fontSize: 12, alignSelf: "center" }}>
+                Use o mesmo e-mail do seu cadastro.
+              </div>
             </div>
           </div>
         </div>
@@ -192,10 +231,37 @@ export default function Login({ theme, setTheme }) {
               {loading ? "Aguarde..." : (mode === "login" ? "Entrar" : "Criar conta")}
             </button>
 
+            {/* ✅ extra: criar conta e assinar */}
+            {mode === "signup" ? (
+              <button
+                type="button"
+                disabled={!canSubmit}
+                onClick={() => {
+                  setSignupThenCheckout(true);
+                  const form = document.querySelector("form");
+                  form?.requestSubmit?.();
+                }}
+                style={{
+                  ...styles.ghostBtn,
+                  width: "100%",
+                  padding: "12px 12px",
+                  border: "1px solid rgba(34,197,94,0.35)",
+                  background: "rgba(34,197,94,0.12)",
+                  fontWeight: 1000,
+                }}
+                title="Criar conta e assinar"
+              >
+                ✅ Criar conta e assinar
+              </button>
+            ) : null}
+
             <div style={styles.row}>
               <button
                 type="button"
-                onClick={() => setMode((p) => (p === "login" ? "signup" : "login"))}
+                onClick={() => {
+                  setSignupThenCheckout(false);
+                  setMode((p) => (p === "login" ? "signup" : "login"));
+                }}
                 style={styles.linkBtn}
               >
                 {mode === "login" ? "Não tenho conta" : "Já tenho conta"}
@@ -350,7 +416,6 @@ const styles = {
   },
 };
 
-// Logo “top”
 function LogoBig() {
   return (
     <svg width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
@@ -381,7 +446,6 @@ function LogoBig() {
   );
 }
 
-/* ✅ Responsivo real */
 if (typeof document !== "undefined") {
   const id = "gfd-login-responsive";
   if (!document.getElementById(id)) {

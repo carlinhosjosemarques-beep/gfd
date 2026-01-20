@@ -7,22 +7,19 @@ import Relatorios from "./Relatorios";
 import Metas from "./Metas";
 
 export default function App() {
-  const [user, setUser] = useState(undefined); // undefined = carregando
+  const [user, setUser] = useState(undefined);
   const [tab, setTab] = useState("dashboard");
 
-  // ✅ perfil (para evitar erro de acesso/RLS e para liberar paywall no futuro)
-  const [profile, setProfile] = useState(undefined); // undefined = carregando, null = não existe
+  const [profile, setProfile] = useState(undefined);
   const [profileErr, setProfileErr] = useState(null);
   const [checkingProfile, setCheckingProfile] = useState(false);
 
-  // Tema global (tudo junto)
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem("gfd_theme");
     if (saved === "dark" || saved === "light") return saved;
     return "light";
   });
 
-  // aplica dataset + classe + color-scheme
   useEffect(() => {
     localStorage.setItem("gfd_theme", theme);
 
@@ -33,7 +30,6 @@ export default function App() {
     root.classList.toggle("light", theme === "light");
   }, [theme]);
 
-  // sessão + listener
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
@@ -75,7 +71,6 @@ export default function App() {
     };
   }, [theme]);
 
-  // aplica CSS vars globalmente
   useEffect(() => {
     const r = document.documentElement.style;
     r.setProperty("--bg", tokens.bg);
@@ -96,48 +91,55 @@ export default function App() {
     r.setProperty("--tabHoverBg", tokens.tabHoverBg);
   }, [tokens]);
 
-  // ======= helpers (canWrite) =======
-
   function parseDateSafe(v) {
     if (!v) return null;
     const d = new Date(v);
     return Number.isFinite(d.getTime()) ? d : null;
   }
 
-  function computeCanWrite(p) {
-    // sem profile => modo leitura
-    if (!p) return false;
+  function computeAccessInfo(p) {
+    if (!p) return { canUseApp: false, canWrite: false, reason: "no_profile", until: null };
 
-    // admin sempre pode
-    if (p.is_admin === true) return true;
-
-    // suportar schema "novo"
-    const accessStatus = p.access_status;
-    const accessUntil = parseDateSafe(p.access_until);
-
-    // suportar schema "antigo"
-    const accessGranted = p.access_granted;
-    const accessExpiresAt = parseDateSafe(p.access_expires_at);
-    const subStatus = String(p.subscription_status || "").toLowerCase();
+    if (p.is_admin === true) {
+      return { canUseApp: true, canWrite: true, reason: "admin", until: null };
+    }
 
     const now = new Date();
 
-    const notExpiredNew = !accessUntil || accessUntil > now;
-    const notExpiredOld = !accessExpiresAt || accessExpiresAt > now;
+    const accessUntil = parseDateSafe(p.access_until);
+    const accessExpiresAt = parseDateSafe(p.access_expires_at);
 
-    const okByAccessStatus = accessStatus === "active" && notExpiredNew;
-    const okByGranted = accessGranted === true && notExpiredOld;
+    const hasExpiry = !!accessUntil || !!accessExpiresAt;
+    const expiry = accessUntil || accessExpiresAt || null;
 
-    const okBySubscription =
-      (subStatus === "active" || subStatus === "paid" || subStatus === "approved") &&
-      (notExpiredNew || notExpiredOld);
+    if (accessUntil && accessUntil <= now) {
+      return { canUseApp: false, canWrite: false, reason: "expired", until: accessUntil };
+    }
+    if (accessExpiresAt && accessExpiresAt <= now) {
+      return { canUseApp: false, canWrite: false, reason: "expired", until: accessExpiresAt };
+    }
 
-    return !!(okByAccessStatus || okByGranted || okBySubscription);
+    const accessStatus = p.access_status;
+    const accessGranted = p.access_granted;
+    const subStatus = String(p.subscription_status || "").toLowerCase();
+
+    const okByAccessStatus = accessStatus === "active";
+    const okByGranted = accessGranted === true;
+    const okBySubscription = subStatus === "active" || subStatus === "paid" || subStatus === "approved";
+
+    const canWrite = !!(okByAccessStatus || okByGranted || okBySubscription);
+
+    return {
+      canUseApp: true,
+      canWrite,
+      reason: canWrite ? "active" : hasExpiry ? "inactive_with_expiry" : "inactive",
+      until: expiry,
+    };
   }
 
-  const canWrite = useMemo(() => computeCanWrite(profile), [profile]);
+  const accessInfo = useMemo(() => computeAccessInfo(profile), [profile]);
+  const canWrite = accessInfo.canWrite;
 
-  // ✅ Carrega profile quando loga (apenas SELECT) + fallback (não quebra se colunas não existirem)
   async function fetchProfile(u) {
     if (!u?.id) {
       setProfile(undefined);
@@ -159,21 +161,18 @@ export default function App() {
     }
 
     try {
-      // 1) tenta pegar tudo (novo + antigo).
       const colsAll =
         "id,email,created_at,updated_at,is_admin,access_status,access_until,subscription_status,access_granted,access_origin,access_expires_at";
       const data1 = await trySelect(colsAll);
       setProfile(data1);
     } catch (e1) {
       try {
-        // 2) fallback schema “antigo”
         const colsLegacy =
           "id,email,created_at,access_granted,access_origin,access_expires_at,subscription_status";
         const data2 = await trySelect(colsLegacy);
         setProfile(data2);
       } catch (e2) {
         try {
-          // 3) último fallback (mínimo)
           const data3 = await trySelect("id,email,created_at");
           setProfile(data3);
         } catch (e3) {
@@ -192,10 +191,8 @@ export default function App() {
   }
 
   useEffect(() => {
-    // ✅ evita loop: só tenta buscar quando user.id existir
     if (user && user !== null) fetchProfile(user);
 
-    // ✅ quando desloga, limpa tudo
     if (user === null) {
       setProfile(undefined);
       setProfileErr(null);
@@ -204,7 +201,31 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // ====== telas de estado ======
+  function fmtBRDateTime(d) {
+    try {
+      return new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(d);
+    } catch {
+      return d ? String(d) : "";
+    }
+  }
+
+  function openRenew() {
+    const url =
+      (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_GFD_RENEW_URL) ||
+      localStorage.getItem("gfd_renew_url") ||
+      "";
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    alert(
+      "Link de renovação não configurado.\n\nDefina VITE_GFD_RENEW_URL no .env (ou salve em localStorage: gfd_renew_url)."
+    );
+  }
+
   if (user === undefined) {
     return (
       <div style={styles.page}>
@@ -226,7 +247,6 @@ export default function App() {
     );
   }
 
-  // ✅ Se deu erro ao carregar profile
   if (profileErr) {
     return (
       <div style={styles.page}>
@@ -263,7 +283,6 @@ export default function App() {
     );
   }
 
-  // ✅ Caso raro: profile ainda não existe (trigger não rodou)
   if (profile === null) {
     return (
       <div style={styles.page}>
@@ -302,11 +321,62 @@ export default function App() {
     );
   }
 
-  // ✅ Aqui profile existe e não dá mais RLS/erro
+  if (accessInfo.reason === "expired") {
+    return (
+      <div style={styles.page}>
+        <div style={{ ...styles.centerCard }}>
+          <div style={{ fontWeight: 1100, fontSize: 18, letterSpacing: -0.2 }}>
+            Assinatura expirada
+          </div>
+
+          <div style={{ marginTop: 10, color: "var(--muted)", fontWeight: 900, lineHeight: 1.4 }}>
+            Seu acesso expirou{accessInfo.until ? ` em ${fmtBRDateTime(accessInfo.until)}` : ""}.
+            Para continuar usando o GFD, renove sua assinatura.
+          </div>
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+            <button onClick={openRenew} style={styles.primaryBtn}>
+              Renovar assinatura
+            </button>
+
+            <button
+              onClick={() => fetchProfile(user)}
+              style={styles.ghostBtn}
+              disabled={checkingProfile}
+              title="Recarregar status do acesso"
+            >
+              {checkingProfile ? "Verificando..." : "Já renovei (atualizar)"}
+            </button>
+
+            <button onClick={() => supabase.auth.signOut()} style={styles.dangerBtn}>
+              Sair
+            </button>
+          </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              padding: 12,
+              borderRadius: 14,
+              border: "1px solid rgba(148,163,184,0.22)",
+              background: "rgba(2,6,23,0.12)",
+              color: "var(--muted)",
+              fontWeight: 850,
+              lineHeight: 1.35,
+              fontSize: 13,
+            }}
+          >
+            Dica: você pode configurar o link de renovação usando <b>VITE_GFD_RENEW_URL</b> no
+            seu <b>.env</b>.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.shell}>
-        {/* Topbar */}
         <header style={styles.topbar}>
           <div style={styles.brand}>
             <LogoMark />
@@ -315,7 +385,6 @@ export default function App() {
               <div style={styles.brandSub}>Gestão Financeira Descomplicada</div>
             </div>
 
-            {/* ✅ badge de acesso */}
             {!canWrite ? (
               <span
                 style={{
@@ -357,7 +426,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* Tabs */}
         <nav style={styles.tabs}>
           <button
             onClick={() => setTab("dashboard")}
@@ -384,10 +452,8 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Conteúdo */}
         <main style={styles.content}>
           {tab === "dashboard" && <Dashboard canWrite={canWrite} />}
-          {/* ✅ AQUI está o ajuste principal pro “modo leitura”: */}
           {tab === "relatorios" && <Relatorios canWrite={canWrite} />}
           {tab === "metas" && <Metas canWrite={canWrite} />}
         </main>
@@ -401,7 +467,6 @@ export default function App() {
     </div>
   );
 }
-/* ================= UI helpers ================= */
 
 function tabStyle(active) {
   return {
@@ -425,7 +490,7 @@ const styles = {
     minHeight: "100dvh",
     width: "100%",
     maxWidth: "100%",
-    overflowX: "hidden", // ✅ evita “faixa” lateral por overflow
+    overflowX: "hidden",
     boxSizing: "border-box",
     background:
       "radial-gradient(1200px 600px at 20% 10%, rgba(37,99,235,0.18), transparent 55%), radial-gradient(900px 500px at 80% 20%, rgba(34,197,94,0.16), transparent 55%), var(--bg)",
@@ -560,7 +625,6 @@ const styles = {
   },
 };
 
-// logo simples e top (SVG)
 function LogoMark() {
   return (
     <svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true">
@@ -591,7 +655,6 @@ function LogoMark() {
   );
 }
 
-/* injeta keyframes + correções de tema/autofill sem CSS externo */
 if (typeof document !== "undefined") {
   const id = "gfd-global-style";
   if (!document.getElementById(id)) {
