@@ -157,6 +157,7 @@ function CollapseSection({ id, title, subtitle, open, onToggle, children, rightS
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={`sec_${id}`}
+        type="button"
         style={styles.collapseHeaderBtn}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -300,27 +301,29 @@ export default function Dashboard({ canWrite } = {}) {
 
   useEffect(() => {
     function onDown(e) {
+      const insideMenu = !!e.target?.closest?.("[data-gfd-portalmenu='1']");
       if (menuOpenId) {
         const btn = menuBtnRefs.current.get(menuOpenId);
         const onBtn = btn && btn.contains(e.target);
-        const insideMenu = !!e.target?.closest?.("[data-gfd-portalmenu='1']");
         if (!insideMenu && !onBtn) setMenuOpenId(null);
       }
       if (contaMenuOpenId) {
         const btn = contaBtnRefs.current.get(contaMenuOpenId);
         const onBtn = btn && btn.contains(e.target);
-        const insideMenu = !!e.target?.closest?.("[data-gfd-portalmenu='1']");
         if (!insideMenu && !onBtn) setContaMenuOpenId(null);
       }
       if (fixaMenuOpenId) {
         const btn = fixaBtnRefs.current.get(fixaMenuOpenId);
         const onBtn = btn && btn.contains(e.target);
-        const insideMenu = !!e.target?.closest?.("[data-gfd-portalmenu='1']");
         if (!insideMenu && !onBtn) setFixaMenuOpenId(null);
       }
     }
     window.addEventListener("mousedown", onDown, true);
-    return () => window.removeEventListener("mousedown", onDown, true);
+    window.addEventListener("touchstart", onDown, true);
+    return () => {
+      window.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("touchstart", onDown, true);
+    };
   }, [menuOpenId, contaMenuOpenId, fixaMenuOpenId]);
 
   const [contas, setContas] = useState([]);
@@ -461,8 +464,6 @@ export default function Dashboard({ canWrite } = {}) {
     return m;
   }, [contas]);
 
-  // ✅ CORREÇÃO DO BUG DA TELA BRANCA:
-  // esses states eram usados no JSX mas não existiam (ReferenceError)
   const [uiOpenContas, setUiOpenContas] = useState(() => safeBoolLS("gfd_open_contas", !defaultCollapsedMobile));
   const [uiOpenFixas, setUiOpenFixas] = useState(() => safeBoolLS("gfd_open_fixas", !defaultCollapsedMobile));
   const [uiOpenNovo, setUiOpenNovo] = useState(() => safeBoolLS("gfd_open_novo", !defaultCollapsedMobile));
@@ -478,6 +479,7 @@ export default function Dashboard({ canWrite } = {}) {
   useEffect(() => setBoolLS("gfd_open_lista_fixas", uiOpenListaFixas), [uiOpenListaFixas]);
   useEffect(() => setBoolLS("gfd_open_lista_parcelas", uiOpenListaParcelas), [uiOpenListaParcelas]);
   useEffect(() => setBoolLS("gfd_open_lista_avulsos", uiOpenListaAvulsos), [uiOpenListaAvulsos]);
+
   const [fixas, setFixas] = useState([]);
   const [fixasOk, setFixasOk] = useState(true);
   const [loadingFixas, setLoadingFixas] = useState(false);
@@ -751,8 +753,6 @@ export default function Dashboard({ canWrite } = {}) {
     if (!vInformado) return;
 
     const desc = (descricao || "").trim();
-    const cat = categoria;
-    const t = tipo;
     const contaEscolhida = contaId || null;
 
     if (!parcelado) {
@@ -762,8 +762,8 @@ export default function Dashboard({ canWrite } = {}) {
         mes_ano: String(data).slice(0, 7),
         valor: vInformado,
         descricao: desc,
-        tipo: t,
-        categoria: cat,
+        tipo,
+        categoria,
         pago: false,
         parcelado: false,
         parcela_num: null,
@@ -782,9 +782,9 @@ export default function Dashboard({ canWrite } = {}) {
     const n = Math.max(2, Math.min(120, Number(qtdParcelas || 2)));
     const grupo = uuidLike();
 
-    let valorParcela = vInformado;
-    if (modoParcela === "dividir") valorParcela = Math.round((vInformado / n) * 100) / 100;
-    else valorParcela = Math.round(vInformado * 100) / 100;
+    let valorParcela = modoParcela === "dividir"
+      ? Math.round((vInformado / n) * 100) / 100
+      : Math.round(vInformado * 100) / 100;
 
     const rows = [];
     let soma = 0;
@@ -795,23 +795,21 @@ export default function Dashboard({ canWrite } = {}) {
       if (modoParcela === "dividir") {
         if (i === n) {
           const totalAteAntes = Math.round(soma * 100) / 100;
-          const diff = Math.round((vInformado - totalAteAntes) * 100) / 100;
-          valorI = diff;
+          valorI = Math.round((vInformado - totalAteAntes) * 100) / 100;
         }
         soma += valorI;
       }
 
       const dataI = addMonthsKeepDay(data, i - 1);
-      const mesAnoI = String(dataI).slice(0, 7);
 
       rows.push({
         conta_id: contaEscolhida,
         data: dataI,
-        mes_ano: mesAnoI,
+        mes_ano: String(dataI).slice(0, 7),
         valor: valorI,
         descricao: `${desc}${desc ? " " : ""}(${i}/${n})`,
-        tipo: t,
-        categoria: cat,
+        tipo,
+        categoria,
         pago: false,
         parcelado: true,
         parcela_num: i,
@@ -839,7 +837,6 @@ export default function Dashboard({ canWrite } = {}) {
     if (!guardWrite()) return;
 
     const novo = !l.pago;
-
     const atual = lancamentos.map((x) => (x.id === l.id ? { ...x, pago: novo } : x));
     setLancamentos(atual);
     recalcular(atual);
@@ -897,13 +894,11 @@ export default function Dashboard({ canWrite } = {}) {
     setEditValor(String(l.valor ?? ""));
     setEditDescricao(l.descricao ?? "");
     setEditTipo(l.tipo ?? "despesa");
-    setEditCategoria(l.categoria ?? (l.tipo === "receita" ? "Salário" : "Alimentação"));
+    setEditCategoria(l.categoria ?? "Alimentação");
     setEditLancContaId(l.conta_id ?? null);
-
     setEditIsParcelado(!!l.parcelado);
     setEditParcelaNum(l.parcela_num ?? null);
     setEditParcelaTotal(l.parcela_total ?? null);
-
     setEditOpen(true);
   }
 
@@ -919,13 +914,11 @@ export default function Dashboard({ canWrite } = {}) {
     const v = parseValor(editValor);
     if (!v) return;
 
-    const mesAnoNovo = String(editData).slice(0, 7);
-
     const { error } = await supabase
       .from("lancamentos")
       .update({
         data: editData,
-        mes_ano: mesAnoNovo,
+        mes_ano: String(editData).slice(0, 7),
         valor: v,
         descricao: (editDescricao || "").trim(),
         tipo: editTipo,
@@ -959,7 +952,7 @@ export default function Dashboard({ canWrite } = {}) {
     const base = stripParcelaSuffix(l.descricao || "");
     setGrpDescricaoBase(base || "Compra parcelada");
     setGrpTipo(l.tipo || "despesa");
-    setGrpCategoria(l.categoria || (l.tipo === "receita" ? "Salário" : "Alimentação"));
+    setGrpCategoria(l.categoria || "Alimentação");
     setGrpContaId(l.conta_id ?? null);
 
     setGrpModo("parcela");
@@ -1016,8 +1009,7 @@ export default function Dashboard({ canWrite } = {}) {
         let vi = vp;
         if (i === n - 1) {
           const totalAteAntes = Math.round(soma * 100) / 100;
-          const diff = Math.round((vInformado - totalAteAntes) * 100) / 100;
-          vi = diff;
+          vi = Math.round((vInformado - totalAteAntes) * 100) / 100;
         }
         valores[i] = vi;
         soma += vi;
@@ -1414,8 +1406,10 @@ export default function Dashboard({ canWrite } = {}) {
                             ...styles.iconButton,
                             opacity: canWrite ? 1 : 0.45,
                             cursor: canWrite ? "pointer" : "not-allowed",
+                            touchAction: "manipulation",
                           }}
                           disabled={!canWrite}
+                          type="button"
                         >
                           ⋮
                         </button>
@@ -1438,7 +1432,6 @@ export default function Dashboard({ canWrite } = {}) {
   const categoriasFixaNovo = fixaTipo === "despesa" ? categoriasDespesa : categoriasReceita;
   const categoriasFixaEdit = editFixaTipo === "despesa" ? categoriasDespesa : categoriasReceita;
 
-  // aliases para manter seu JSX sem estourar ReferenceError
   const contaSaldo = contaSaldoInicial;
   const setContaSaldo = setContaSaldoInicial;
   const salvarConta = criarConta;
@@ -1446,10 +1439,7 @@ export default function Dashboard({ canWrite } = {}) {
   const salvarFixa = criarFixa;
 
   const setContaMenuBtnRef = setContaBtnRef;
-  const contaMenuBtnRefs = contaBtnRefs.current;
-
   const setFixaMenuBtnRef = setFixaBtnRef;
-  const fixaMenuBtnRefs = fixaBtnRefs.current;
 
   return (
     <div style={styles.page}>
@@ -1514,6 +1504,7 @@ export default function Dashboard({ canWrite } = {}) {
             aria-expanded={uiPersonalizarOpen}
             aria-label="Abrir personalização do dashboard"
             title="Personalizar"
+            type="button"
           >
             ⚙️ Personalizar
           </button>
@@ -1551,7 +1542,7 @@ export default function Dashboard({ canWrite } = {}) {
 
         <div style={{ ...styles.card, padding: 12 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={mesAnterior} style={styles.iconButtonCompact} aria-label="Mês anterior" title="Mês anterior">⬅️</button>
+            <button onClick={mesAnterior} style={styles.iconButtonCompact} aria-label="Mês anterior" title="Mês anterior" type="button">⬅️</button>
 
             <select value={mes} onChange={(e) => setMes(Number(e.target.value))} style={styles.selectCompact} aria-label="Selecionar mês">
               {meses.map((m, i) => <option key={i} value={i}>{m}</option>)}
@@ -1561,7 +1552,7 @@ export default function Dashboard({ canWrite } = {}) {
               {anosOptions.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
 
-            <button onClick={proximoMes} style={styles.iconButtonCompact} aria-label="Próximo mês" title="Próximo mês">➡️</button>
+            <button onClick={proximoMes} style={styles.iconButtonCompact} aria-label="Próximo mês" title="Próximo mês" type="button">➡️</button>
 
             <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ color: "var(--muted)", fontSize: 13, fontWeight: 900 }}>
@@ -1642,7 +1633,7 @@ export default function Dashboard({ canWrite } = {}) {
                     disabled={!canWrite}
                   />
 
-                  <button onClick={salvarConta} style={styles.primaryBtn} disabled={!canWrite}>
+                  <button onClick={salvarConta} style={styles.primaryBtn} disabled={!canWrite} type="button">
                     ➕ Adicionar
                   </button>
 
@@ -1672,11 +1663,12 @@ export default function Dashboard({ canWrite } = {}) {
                       <button
                         ref={(node) => setContaMenuBtnRef(c.id, node)}
                         onClick={() => toggleContaMenu(c.id)}
-                        style={styles.iconButton}
+                        style={{ ...styles.iconButton, touchAction: "manipulation" }}
                         aria-haspopup="menu"
                         aria-expanded={contaMenuOpenId === c.id}
                         disabled={!canWrite}
                         title={!canWrite ? "Modo leitura" : "Opções"}
+                        type="button"
                       >
                         ⋮
                       </button>
@@ -1762,7 +1754,7 @@ export default function Dashboard({ canWrite } = {}) {
                     ))}
                   </select>
 
-                  <button onClick={salvarFixa} style={styles.primaryBtn} disabled={!canWrite}>
+                  <button onClick={salvarFixa} style={styles.primaryBtn} disabled={!canWrite} type="button">
                     ➕ Criar fixa
                   </button>
 
@@ -1794,11 +1786,12 @@ export default function Dashboard({ canWrite } = {}) {
                       <button
                         ref={(node) => setFixaMenuBtnRef(f.id, node)}
                         onClick={() => toggleFixaMenu(f.id)}
-                        style={styles.iconButton}
+                        style={{ ...styles.iconButton, touchAction: "manipulation" }}
                         aria-haspopup="menu"
                         aria-expanded={fixaMenuOpenId === f.id}
                         disabled={!canWrite}
                         title={!canWrite ? "Modo leitura" : "Opções"}
+                        type="button"
                       >
                         ⋮
                       </button>
@@ -1911,7 +1904,7 @@ export default function Dashboard({ canWrite } = {}) {
                   </>
                 ) : null}
 
-                <button onClick={salvar} style={styles.primaryBtn} disabled={!canWrite}>
+                <button onClick={salvar} style={styles.primaryBtn} disabled={!canWrite} type="button">
                   ✅ Salvar (Ctrl/⌘ + Enter)
                 </button>
 
@@ -1945,7 +1938,7 @@ export default function Dashboard({ canWrite } = {}) {
                   <option value="valor">Ordenar: Valor</option>
                 </select>
 
-                <button onClick={exportarCsv} style={styles.secondaryBtn} disabled={!canWrite} title={!canWrite ? "Modo leitura" : "Exportar CSV"}>
+                <button onClick={exportarCsv} style={styles.secondaryBtn} disabled={!canWrite} title={!canWrite ? "Modo leitura" : "Exportar CSV"} type="button">
                   ⬇️ Exportar CSV
                 </button>
               </div>
@@ -1983,27 +1976,27 @@ export default function Dashboard({ canWrite } = {}) {
 
               return (
                 <div style={styles.menuBox} role="menu">
-                  <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); abrirEditar(l); }}>
+                  <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); abrirEditar(l); }} type="button">
                     ✏️ Editar
                   </button>
 
                   {isParc ? (
-                    <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); abrirEditarGrupo(l); }}>
+                    <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); abrirEditarGrupo(l); }} type="button">
                       🧩 Editar grupo
                     </button>
                   ) : null}
 
-                  <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); togglePago(l); }}>
+                  <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); togglePago(l); }} type="button">
                     {l.pago ? "↩️ Marcar como pendente" : "✅ Marcar como pago"}
                   </button>
 
                   {isParc ? (
-                    <button style={menuItemStyle({ danger: true })} onClick={() => { setMenuOpenId(null); excluirGrupo(l); }}>
+                    <button style={menuItemStyle({ danger: true })} onClick={() => { setMenuOpenId(null); excluirGrupo(l); }} type="button">
                       🗑️ Excluir grupo
                     </button>
                   ) : null}
 
-                  <button style={menuItemStyle({ danger: true })} onClick={() => { setMenuOpenId(null); excluirLanc(l); }}>
+                  <button style={menuItemStyle({ danger: true })} onClick={() => { setMenuOpenId(null); excluirLanc(l); }} type="button">
                     🗑️ Excluir
                   </button>
                 </div>
@@ -2020,10 +2013,10 @@ export default function Dashboard({ canWrite } = {}) {
 
               return (
                 <div style={styles.menuBox} role="menu">
-                  <button style={menuItemStyle()} onClick={() => { setContaMenuOpenId(null); abrirEditarConta(c); }}>
+                  <button style={menuItemStyle()} onClick={() => { setContaMenuOpenId(null); abrirEditarConta(c); }} type="button">
                     ✏️ Editar
                   </button>
-                  <button style={menuItemStyle({ danger: true })} onClick={() => { setContaMenuOpenId(null); excluirConta(c); }}>
+                  <button style={menuItemStyle({ danger: true })} onClick={() => { setContaMenuOpenId(null); excluirConta(c); }} type="button">
                     🗑️ Excluir
                   </button>
                 </div>
@@ -2040,10 +2033,10 @@ export default function Dashboard({ canWrite } = {}) {
 
               return (
                 <div style={styles.menuBox} role="menu">
-                  <button style={menuItemStyle()} onClick={() => { setFixaMenuOpenId(null); abrirEditarFixa(f); }}>
+                  <button style={menuItemStyle()} onClick={() => { setFixaMenuOpenId(null); abrirEditarFixa(f); }} type="button">
                     ✏️ Editar
                   </button>
-                  <button style={menuItemStyle({ danger: true })} onClick={() => { setFixaMenuOpenId(null); excluirFixa(f); }}>
+                  <button style={menuItemStyle({ danger: true })} onClick={() => { setFixaMenuOpenId(null); excluirFixa(f); }} type="button">
                     🗑️ Excluir
                   </button>
                 </div>
@@ -2115,8 +2108,8 @@ export default function Dashboard({ canWrite } = {}) {
               </div>
 
               <div style={styles.modalFooterSticky}>
-                <button onClick={fecharEditar} style={styles.secondaryBtn}>Cancelar</button>
-                <button onClick={salvarEdicao} style={styles.primaryBtn} disabled={!canWrite}>✅ Salvar</button>
+                <button onClick={fecharEditar} style={styles.secondaryBtn} type="button">Cancelar</button>
+                <button onClick={salvarEdicao} style={styles.primaryBtn} disabled={!canWrite} type="button">✅ Salvar</button>
               </div>
 
               {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
@@ -2180,8 +2173,8 @@ export default function Dashboard({ canWrite } = {}) {
               </div>
 
               <div style={styles.modalFooterSticky}>
-                <button onClick={fecharEditarGrupo} style={styles.secondaryBtn}>Cancelar</button>
-                <button onClick={salvarEdicaoGrupo} style={styles.primaryBtn} disabled={!canWrite}>✅ Salvar grupo</button>
+                <button onClick={fecharEditarGrupo} style={styles.secondaryBtn} type="button">Cancelar</button>
+                <button onClick={salvarEdicaoGrupo} style={styles.primaryBtn} disabled={!canWrite} type="button">✅ Salvar grupo</button>
               </div>
 
               {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
@@ -2216,8 +2209,8 @@ export default function Dashboard({ canWrite } = {}) {
               </div>
 
               <div style={styles.modalFooterSticky}>
-                <button onClick={fecharEditarConta} style={styles.secondaryBtn}>Cancelar</button>
-                <button onClick={salvarEdicaoConta} style={styles.primaryBtn} disabled={!canWrite}>✅ Salvar</button>
+                <button onClick={fecharEditarConta} style={styles.secondaryBtn} type="button">Cancelar</button>
+                <button onClick={salvarEdicaoConta} style={styles.primaryBtn} disabled={!canWrite} type="button">✅ Salvar</button>
               </div>
 
               {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
@@ -2269,8 +2262,8 @@ export default function Dashboard({ canWrite } = {}) {
               </div>
 
               <div style={styles.modalFooterSticky}>
-                <button onClick={fecharEditarFixa} style={styles.secondaryBtn}>Cancelar</button>
-                <button onClick={salvarEdicaoFixa} style={styles.primaryBtn} disabled={!canWrite}>✅ Salvar</button>
+                <button onClick={fecharEditarFixa} style={styles.secondaryBtn} type="button">Cancelar</button>
+                <button onClick={salvarEdicaoFixa} style={styles.primaryBtn} disabled={!canWrite} type="button">✅ Salvar</button>
               </div>
 
               {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
@@ -2323,12 +2316,16 @@ function PortalMenu({ anchorEl, children, onClose }) {
 
   return (
     <div
-      style={styles.menuOverlay}
+      style={{ ...styles.menuOverlay, touchAction: "manipulation" }}
+      data-gfd-portalmenu="1"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
-      <div style={{ ...styles.menuFloating, left: pos.x, top: pos.y, width: pos.w }}>
+      <div
+        style={{ ...styles.menuFloating, left: pos.x, top: pos.y, width: pos.w }}
+        data-gfd-portalmenu="1"
+      >
         {children}
       </div>
     </div>
@@ -2438,6 +2435,7 @@ const styles = {
     borderRadius: 12,
     cursor: "pointer",
     fontWeight: 1000,
+    touchAction: "manipulation",
   },
 
   secondaryBtn: {
@@ -2448,6 +2446,7 @@ const styles = {
     borderRadius: 12,
     cursor: "pointer",
     fontWeight: 1000,
+    touchAction: "manipulation",
   },
 
   iconButton: {
@@ -2459,6 +2458,7 @@ const styles = {
     cursor: "pointer",
     fontWeight: 1100,
     lineHeight: 1,
+    touchAction: "manipulation",
   },
 
   badgeMonthYear: {
@@ -2514,6 +2514,7 @@ const styles = {
     cursor: "pointer",
     fontWeight: 1000,
     fontSize: 12,
+    touchAction: "manipulation",
   },
 
   chipActive: {
