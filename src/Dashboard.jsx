@@ -33,16 +33,18 @@ function ym(ano, mes) {
 }
 
 function parseValor(str) {
-  const v = Number(String(str ?? "").trim().replace(",", "."));
+  const raw = String(str ?? "").trim();
+  if (!raw) return 0;
+  const v = Number(raw.replace(/\./g, "").replace(",", "."));
   return Number.isFinite(v) ? v : 0;
 }
 
 function addMonthsKeepDay(yyyyMmDd, add) {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const base = new Date(y, m - 1, 1);
+  const [y, m, d] = String(yyyyMmDd).split("-").map(Number);
+  const base = new Date(y, (m || 1) - 1, 1);
   const target = new Date(base.getFullYear(), base.getMonth() + add, 1);
   const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-  const day = Math.min(d, lastDay);
+  const day = Math.min(Number(d || 1), lastDay);
   return ymd(new Date(target.getFullYear(), target.getMonth(), day));
 }
 
@@ -240,18 +242,12 @@ export default function Dashboard({ canWrite } = {}) {
   const [uiShowFixas, setUiShowFixas] = useState(() => safeBoolLS("gfd_ui_fixas", !defaultCollapsedMobile));
   const [uiShowNovo, setUiShowNovo] = useState(() => safeBoolLS("gfd_ui_novo", !defaultCollapsedMobile));
   const [uiShowLista, setUiShowLista] = useState(() => safeBoolLS("gfd_ui_lista", true));
-  const [uiShowListaFixas, setUiShowListaFixas] = useState(() => safeBoolLS("gfd_ui_lista_fixas", true));
-  const [uiShowListaParcelas, setUiShowListaParcelas] = useState(() => safeBoolLS("gfd_ui_lista_parcelas", true));
-  const [uiShowListaAvulsos, setUiShowListaAvulsos] = useState(() => safeBoolLS("gfd_ui_lista_avulsos", true));
 
   useEffect(() => setBoolLS("gfd_ui_personalizar", uiPersonalizarOpen), [uiPersonalizarOpen]);
   useEffect(() => setBoolLS("gfd_ui_contas", uiShowContas), [uiShowContas]);
   useEffect(() => setBoolLS("gfd_ui_fixas", uiShowFixas), [uiShowFixas]);
   useEffect(() => setBoolLS("gfd_ui_novo", uiShowNovo), [uiShowNovo]);
   useEffect(() => setBoolLS("gfd_ui_lista", uiShowLista), [uiShowLista]);
-  useEffect(() => setBoolLS("gfd_ui_lista_fixas", uiShowListaFixas), [uiShowListaFixas]);
-  useEffect(() => setBoolLS("gfd_ui_lista_parcelas", uiShowListaParcelas), [uiShowListaParcelas]);
-  useEffect(() => setBoolLS("gfd_ui_lista_avulsos", uiShowListaAvulsos), [uiShowListaAvulsos]);
 
   const buscaRef = useRef(null);
   const novoRef = useRef(null);
@@ -263,11 +259,13 @@ export default function Dashboard({ canWrite } = {}) {
 
   const [menuOpenId, setMenuOpenId] = useState(null);
   const menuBtnRefs = useRef(new Map());
+
   function setMenuBtnRef(id, node) {
     if (!id) return;
     if (node) menuBtnRefs.current.set(id, node);
     else menuBtnRefs.current.delete(id);
   }
+
   function toggleMenu(id) {
     if (!canWrite) return;
     setMenuOpenId((prev) => (prev === id ? null : id));
@@ -275,12 +273,14 @@ export default function Dashboard({ canWrite } = {}) {
 
   const [contaMenuOpenId, setContaMenuOpenId] = useState(null);
   const contaBtnRefs = useRef(new Map());
+
   function setContaBtnRef(id, node) {
     const map = contaBtnRefs.current;
     if (!id) return;
     if (!node) map.delete(id);
     else map.set(id, node);
   }
+
   function toggleContaMenu(id) {
     if (!canWrite) return;
     setContaMenuOpenId((prev) => (prev === id ? null : id));
@@ -288,12 +288,14 @@ export default function Dashboard({ canWrite } = {}) {
 
   const [fixaMenuOpenId, setFixaMenuOpenId] = useState(null);
   const fixaBtnRefs = useRef(new Map());
+
   function setFixaBtnRef(id, node) {
     const map = fixaBtnRefs.current;
     if (!id) return;
     if (!node) map.delete(id);
     else map.set(id, node);
   }
+
   function toggleFixaMenu(id) {
     if (!canWrite) return;
     setFixaMenuOpenId((prev) => (prev === id ? null : id));
@@ -318,6 +320,7 @@ export default function Dashboard({ canWrite } = {}) {
         if (!insideMenu && !onBtn) setFixaMenuOpenId(null);
       }
     }
+
     window.addEventListener("mousedown", onDown, true);
     window.addEventListener("touchstart", onDown, true);
     return () => {
@@ -326,12 +329,24 @@ export default function Dashboard({ canWrite } = {}) {
     };
   }, [menuOpenId, contaMenuOpenId, fixaMenuOpenId]);
 
+  const [isMac, setIsMac] = useState(false);
+  useEffect(() => {
+    try {
+      const plat = String(navigator?.platform || "");
+      const ua = String(navigator?.userAgent || "");
+      setIsMac(/mac/i.test(plat) || /mac os/i.test(ua));
+    } catch {
+      setIsMac(false);
+    }
+  }, []);
+
   const [contas, setContas] = useState([]);
   const [loadingContas, setLoadingContas] = useState(false);
 
   const [contaNome, setContaNome] = useState("");
   const [contaSaldoInicial, setContaSaldoInicial] = useState("");
   const [contaTipo, setContaTipo] = useState("Conta");
+
   const [contaId, setContaId] = useState("");
   const [filtroContaId, setFiltroContaId] = useState("todas");
 
@@ -368,6 +383,7 @@ export default function Dashboard({ canWrite } = {}) {
 
     const payload = { nome, tipo: (contaTipo || "Conta").trim(), saldo_inicial: saldo, ativo: true };
     const { error } = await supabase.from("contas").insert(payload);
+
     if (error) {
       console.error("Erro criar conta:", error);
       return;
@@ -398,8 +414,6 @@ export default function Dashboard({ canWrite } = {}) {
     setEditContaOpen(false);
     setEditContaId(null);
   }
-
-  const [lancamentos, setLancamentos] = useState([]);
 
   async function salvarEdicaoConta() {
     if (!guardWrite()) return;
@@ -464,6 +478,8 @@ export default function Dashboard({ canWrite } = {}) {
     return m;
   }, [contas]);
 
+  const [lancamentos, setLancamentos] = useState([]);
+
   const [uiOpenContas, setUiOpenContas] = useState(() => safeBoolLS("gfd_open_contas", !defaultCollapsedMobile));
   const [uiOpenFixas, setUiOpenFixas] = useState(() => safeBoolLS("gfd_open_fixas", !defaultCollapsedMobile));
   const [uiOpenNovo, setUiOpenNovo] = useState(() => safeBoolLS("gfd_open_novo", !defaultCollapsedMobile));
@@ -480,6 +496,7 @@ export default function Dashboard({ canWrite } = {}) {
   useEffect(() => setBoolLS("gfd_open_lista_parcelas", uiOpenListaParcelas), [uiOpenListaParcelas]);
   useEffect(() => setBoolLS("gfd_open_lista_avulsos", uiOpenListaAvulsos), [uiOpenListaAvulsos]);
 
+  // (continua na Parte 2/3)
   const [fixas, setFixas] = useState([]);
   const [fixasOk, setFixasOk] = useState(true);
   const [loadingFixas, setLoadingFixas] = useState(false);
@@ -488,7 +505,7 @@ export default function Dashboard({ canWrite } = {}) {
   const [fixaValor, setFixaValor] = useState("");
   const [fixaTipo, setFixaTipo] = useState("despesa");
   const [fixaCategoria, setFixaCategoria] = useState("Alimentação");
-  const [fixaDia, setFixaDia] = useState(5);
+  const [fixaDia, setFixaDia] = useState("5");
   const [fixaContaId, setFixaContaId] = useState("");
 
   async function carregarFixas() {
@@ -525,7 +542,7 @@ export default function Dashboard({ canWrite } = {}) {
 
     const desc = (fixaDescricao || "").trim();
     const v = parseValor(fixaValor);
-    const dia = Math.max(1, Math.min(31, Number(fixaDia || 1)));
+    const diaNum = Math.max(1, Math.min(31, Number(String(fixaDia || "").replace(/\D/g, "") || 1)));
     if (!desc || !v) return;
 
     const payload = {
@@ -533,7 +550,7 @@ export default function Dashboard({ canWrite } = {}) {
       tipo: fixaTipo,
       categoria: fixaCategoria,
       valor: v,
-      dia_vencimento: dia,
+      dia_vencimento: diaNum,
       conta_id: fixaContaId || null,
       ativo: true,
     };
@@ -549,7 +566,7 @@ export default function Dashboard({ canWrite } = {}) {
     setFixaValor("");
     setFixaTipo("despesa");
     setFixaCategoria("Alimentação");
-    setFixaDia(5);
+    setFixaDia("5");
     setFixaContaId("");
 
     const lista = await carregarFixas();
@@ -563,7 +580,7 @@ export default function Dashboard({ canWrite } = {}) {
   const [editFixaValor, setEditFixaValor] = useState("");
   const [editFixaTipo, setEditFixaTipo] = useState("despesa");
   const [editFixaCategoria, setEditFixaCategoria] = useState("Alimentação");
-  const [editFixaDia, setEditFixaDia] = useState(5);
+  const [editFixaDia, setEditFixaDia] = useState("5");
   const [editFixaContaId, setEditFixaContaId] = useState("");
 
   function abrirEditarFixa(f) {
@@ -573,7 +590,7 @@ export default function Dashboard({ canWrite } = {}) {
     setEditFixaValor(String(f.valor ?? ""));
     setEditFixaTipo(f.tipo ?? "despesa");
     setEditFixaCategoria(f.categoria ?? (f.tipo === "receita" ? "Salário" : "Alimentação"));
-    setEditFixaDia(Number(f.dia_vencimento || 5));
+    setEditFixaDia(String(Number(f.dia_vencimento || 5)));
     setEditFixaContaId(f.conta_id ?? "");
     setEditFixaOpen(true);
   }
@@ -590,7 +607,7 @@ export default function Dashboard({ canWrite } = {}) {
 
     const desc = (editFixaDescricao || "").trim();
     const v = parseValor(editFixaValor);
-    const dia = Math.max(1, Math.min(31, Number(editFixaDia || 1)));
+    const diaNum = Math.max(1, Math.min(31, Number(String(editFixaDia || "").replace(/\D/g, "") || 1)));
     if (!desc || !v) return;
 
     const { error } = await supabase
@@ -600,7 +617,7 @@ export default function Dashboard({ canWrite } = {}) {
         valor: v,
         tipo: editFixaTipo,
         categoria: editFixaCategoria,
-        dia_vencimento: dia,
+        dia_vencimento: diaNum,
         conta_id: editFixaContaId || null,
       })
       .eq("id", editFixaId);
@@ -691,8 +708,9 @@ export default function Dashboard({ canWrite } = {}) {
   const [descricao, setDescricao] = useState("");
   const [tipo, setTipo] = useState("despesa");
   const [categoria, setCategoria] = useState("Alimentação");
+
   const [parcelado, setParcelado] = useState(false);
-  const [qtdParcelas, setQtdParcelas] = useState(2);
+  const [qtdParcelas, setQtdParcelas] = useState("2");
   const [modoParcela, setModoParcela] = useState("dividir");
 
   const [receitasRecebidas, setReceitasRecebidas] = useState(0);
@@ -779,7 +797,7 @@ export default function Dashboard({ canWrite } = {}) {
       return;
     }
 
-    const n = Math.max(2, Math.min(120, Number(qtdParcelas || 2)));
+    const n = Math.max(2, Math.min(120, Number(String(qtdParcelas || "2").replace(/\D/g, "") || 2)));
     const grupo = uuidLike();
 
     let valorParcela = modoParcela === "dividir"
@@ -827,7 +845,7 @@ export default function Dashboard({ canWrite } = {}) {
     setValor("");
     setDescricao("");
     setParcelado(false);
-    setQtdParcelas(2);
+    setQtdParcelas("2");
     setModoParcela("dividir");
 
     await carregarLancamentos();
@@ -1076,14 +1094,11 @@ export default function Dashboard({ canWrite } = {}) {
       if ((e.key === "n" || e.key === "N") && !isTypingTarget(e.target)) {
         e.preventDefault();
         setUiShowNovo(true);
-        setTimeout(() => {
-          novoRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-        }, 0);
+        setTimeout(() => (novoRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" })), 0);
         return;
       }
 
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        if (!isTypingTarget(e.target)) return;
         const el = e.target;
         if (novoRef.current && novoRef.current.contains(el)) {
           e.preventDefault();
@@ -1116,7 +1131,6 @@ export default function Dashboard({ canWrite } = {}) {
 
       const v = Number(l.valor) || 0;
       const obj = map.get(cid);
-
       if (l.tipo === "receita") obj.receitas += v;
       if (l.tipo === "despesa") obj.despesas += v;
     }
@@ -1147,8 +1161,8 @@ export default function Dashboard({ canWrite } = {}) {
     { key: "receitas", label: "Receitas" },
     { key: "despesas", label: "Despesas" },
   ];
-  const [chip, setChip] = useState("todos");
 
+  const [chip, setChip] = useState("todos");
   const [sortMode, setSortMode] = useState("data");
 
   function sortComparator(a, b) {
@@ -1209,9 +1223,7 @@ export default function Dashboard({ canWrite } = {}) {
 
   const fixasDoMes = useMemo(() => {
     if (!fixasOk) return [];
-    return (listaChips || []).filter((l) =>
-      !l.parcelado && l.parcela_grupo && fixaIdsSet.has(l.parcela_grupo)
-    );
+    return (listaChips || []).filter((l) => !l.parcelado && l.parcela_grupo && fixaIdsSet.has(l.parcela_grupo));
   }, [listaChips, fixaIdsSet, fixasOk]);
 
   const parcelasDoMes = useMemo(() => (listaChips || []).filter((l) => !!l.parcelado), [listaChips]);
@@ -1287,7 +1299,7 @@ export default function Dashboard({ canWrite } = {}) {
         <div style={styles.modalCard}>
           <div style={styles.modalHeaderSticky}>
             <div style={{ fontWeight: 1000 }}>{title}</div>
-            <button onClick={onClose} style={styles.iconButton} aria-label="Fechar modal">✖️</button>
+            <button onClick={onClose} style={styles.iconButton} aria-label="Fechar modal" type="button">✖️</button>
           </div>
           <div style={styles.modalBodyScroll}>
             {children}
@@ -1426,20 +1438,14 @@ export default function Dashboard({ canWrite } = {}) {
   }
 
   const saldoReal = receitasRecebidas - despesasPagas;
+
   const categoriasNovo = tipo === "despesa" ? categoriasDespesa : categoriasReceita;
   const categoriasEdit = editTipo === "despesa" ? categoriasDespesa : categoriasReceita;
   const categoriasGrupo = grpTipo === "despesa" ? categoriasDespesa : categoriasReceita;
   const categoriasFixaNovo = fixaTipo === "despesa" ? categoriasDespesa : categoriasReceita;
   const categoriasFixaEdit = editFixaTipo === "despesa" ? categoriasDespesa : categoriasReceita;
 
-  const contaSaldo = contaSaldoInicial;
-  const setContaSaldo = setContaSaldoInicial;
-  const salvarConta = criarConta;
-
-  const salvarFixa = criarFixa;
-
-  const setContaMenuBtnRef = setContaBtnRef;
-  const setFixaMenuBtnRef = setFixaBtnRef;
+  const salvarHotkeyLabel = `${isMac ? "⌘" : "Ctrl"} + Enter`;
 
   return (
     <div style={styles.page}>
@@ -1626,20 +1632,18 @@ export default function Dashboard({ canWrite } = {}) {
                   </select>
 
                   <input
-                    value={contaSaldo}
-                    onChange={(e) => setContaSaldo(e.target.value)}
+                    value={contaSaldoInicial}
+                    onChange={(e) => setContaSaldoInicial(e.target.value)}
                     placeholder="Saldo inicial (opcional)"
                     style={styles.input}
                     disabled={!canWrite}
                   />
 
-                  <button onClick={salvarConta} style={styles.primaryBtn} disabled={!canWrite} type="button">
+                  <button onClick={criarConta} style={styles.primaryBtn} disabled={!canWrite} type="button">
                     ➕ Adicionar
                   </button>
 
-                  {!canWrite ? (
-                    <span style={styles.lockInline}>🔒 Modo leitura</span>
-                  ) : null}
+                  {!canWrite ? <span style={styles.lockInline}>🔒 Modo leitura</span> : null}
                 </div>
               </div>
 
@@ -1661,7 +1665,7 @@ export default function Dashboard({ canWrite } = {}) {
 
                     <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
                       <button
-                        ref={(node) => setContaMenuBtnRef(c.id, node)}
+                        ref={(node) => setContaBtnRef(c.id, node)}
                         onClick={() => toggleContaMenu(c.id)}
                         style={{ ...styles.iconButton, touchAction: "manipulation" }}
                         aria-haspopup="menu"
@@ -1754,7 +1758,7 @@ export default function Dashboard({ canWrite } = {}) {
                     ))}
                   </select>
 
-                  <button onClick={salvarFixa} style={styles.primaryBtn} disabled={!canWrite} type="button">
+                  <button onClick={criarFixa} style={styles.primaryBtn} disabled={!canWrite} type="button">
                     ➕ Criar fixa
                   </button>
 
@@ -1784,7 +1788,7 @@ export default function Dashboard({ canWrite } = {}) {
 
                     <div style={{ position: "relative", display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
                       <button
-                        ref={(node) => setFixaMenuBtnRef(f.id, node)}
+                        ref={(node) => setFixaBtnRef(f.id, node)}
                         onClick={() => toggleFixaMenu(f.id)}
                         style={{ ...styles.iconButton, touchAction: "manipulation" }}
                         aria-haspopup="menu"
@@ -1889,7 +1893,7 @@ export default function Dashboard({ canWrite } = {}) {
                   <>
                     <input
                       value={qtdParcelas}
-                      onChange={(e) => setQtdParcelas(Number(e.target.value || 2))}
+                      onChange={(e) => setQtdParcelas(e.target.value)}
                       style={{ ...styles.input, width: 120 }}
                       disabled={!canWrite}
                       inputMode="numeric"
@@ -1905,7 +1909,7 @@ export default function Dashboard({ canWrite } = {}) {
                 ) : null}
 
                 <button onClick={salvar} style={styles.primaryBtn} disabled={!canWrite} type="button">
-                  ✅ Salvar (Ctrl/⌘ + Enter)
+                  ✅ Salvar ({salvarHotkeyLabel})
                 </button>
 
                 {!canWrite ? <span style={styles.lockInline}>🔒 Modo leitura</span> : null}
@@ -1966,688 +1970,418 @@ export default function Dashboard({ canWrite } = {}) {
           </CollapseSection>
         ) : null}
 
-        {menuOpenId ? (
-          <PortalMenu anchorEl={menuBtnRefs.current.get(menuOpenId)} onClose={() => setMenuOpenId(null)}>
-            {(() => {
-              const l = (lancamentos || []).find((x) => x.id === menuOpenId);
-              if (!l) return null;
-
-              const isParc = !!l.parcelado && !!l.parcela_grupo;
-
-              return (
-                <div style={styles.menuBox} role="menu">
-                  <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); abrirEditar(l); }} type="button">
-                    ✏️ Editar
-                  </button>
-
-                  {isParc ? (
-                    <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); abrirEditarGrupo(l); }} type="button">
-                      🧩 Editar grupo
-                    </button>
-                  ) : null}
-
-                  <button style={menuItemStyle()} onClick={() => { setMenuOpenId(null); togglePago(l); }} type="button">
-                    {l.pago ? "↩️ Marcar como pendente" : "✅ Marcar como pago"}
-                  </button>
-
-                  {isParc ? (
-                    <button style={menuItemStyle({ danger: true })} onClick={() => { setMenuOpenId(null); excluirGrupo(l); }} type="button">
-                      🗑️ Excluir grupo
-                    </button>
-                  ) : null}
-
-                  <button style={menuItemStyle({ danger: true })} onClick={() => { setMenuOpenId(null); excluirLanc(l); }} type="button">
-                    🗑️ Excluir
-                  </button>
-                </div>
-              );
-            })()}
-          </PortalMenu>
-        ) : null}
-
-        {contaMenuOpenId ? (
-          <PortalMenu anchorEl={contaBtnRefs.current.get(contaMenuOpenId)} onClose={() => setContaMenuOpenId(null)}>
-            {(() => {
-              const c = (contas || []).find((x) => x.id === contaMenuOpenId);
-              if (!c) return null;
-
-              return (
-                <div style={styles.menuBox} role="menu">
-                  <button style={menuItemStyle()} onClick={() => { setContaMenuOpenId(null); abrirEditarConta(c); }} type="button">
-                    ✏️ Editar
-                  </button>
-                  <button style={menuItemStyle({ danger: true })} onClick={() => { setContaMenuOpenId(null); excluirConta(c); }} type="button">
-                    🗑️ Excluir
-                  </button>
-                </div>
-              );
-            })()}
-          </PortalMenu>
-        ) : null}
-
-        {fixaMenuOpenId ? (
-          <PortalMenu anchorEl={fixaBtnRefs.current.get(fixaMenuOpenId)} onClose={() => setFixaMenuOpenId(null)}>
-            {(() => {
-              const f = (fixas || []).find((x) => x.id === fixaMenuOpenId);
-              if (!f) return null;
-
-              return (
-                <div style={styles.menuBox} role="menu">
-                  <button style={menuItemStyle()} onClick={() => { setFixaMenuOpenId(null); abrirEditarFixa(f); }} type="button">
-                    ✏️ Editar
-                  </button>
-                  <button style={menuItemStyle({ danger: true })} onClick={() => { setFixaMenuOpenId(null); excluirFixa(f); }} type="button">
-                    🗑️ Excluir
-                  </button>
-                </div>
-              );
-            })()}
-          </PortalMenu>
-        ) : null}
-
-        {editOpen ? (
-          <Modal title="Editar lançamento" onClose={fecharEditar}>
-            <div style={{ display: "grid", gap: 10 }}>
-              <div style={styles.modalGrid}>
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Data</span>
-                  <input type="date" value={editData || ""} onChange={(e) => setEditData(e.target.value)} style={styles.input} />
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Valor</span>
-                  <input value={editValor} onChange={(e) => setEditValor(e.target.value)} style={styles.input} />
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Tipo</span>
-                  <select
-                    value={editTipo}
-                    onChange={(e) => {
-                      const t = e.target.value;
-                      setEditTipo(t);
-                      const cats = t === "despesa" ? categoriasDespesa : categoriasReceita;
-                      if (!cats.includes(editCategoria)) setEditCategoria(cats[0] || "Outros");
-                    }}
-                    style={styles.select}
-                  >
-                    <option value="despesa">Despesa</option>
-                    <option value="receita">Receita</option>
-                  </select>
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Categoria</span>
-                  <select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} style={styles.select}>
-                    {(categoriasEdit || []).map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
-                  <span style={styles.labelTxt}>Descrição</span>
-                  <input value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} style={styles.input} />
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Conta</span>
-                  <select value={editLancContaId || ""} onChange={(e) => setEditLancContaId(e.target.value || null)} style={styles.select}>
-                    <option value="">Sem conta</option>
-                    {contas.map((c) => (
-                      <option key={c.id} value={c.id}>{c.nome}</option>
-                    ))}
-                  </select>
-                </label>
-
-                {editIsParcelado ? (
-                  <div style={{ ...styles.badgeLight, gridColumn: "1 / -1" }}>
-                    Parcelado: {editParcelaNum}/{editParcelaTotal} (editar aqui altera apenas esta parcela)
-                  </div>
-                ) : null}
-              </div>
-
-              <div style={styles.modalFooterSticky}>
-                <button onClick={fecharEditar} style={styles.secondaryBtn} type="button">Cancelar</button>
-                <button onClick={salvarEdicao} style={styles.primaryBtn} disabled={!canWrite} type="button">✅ Salvar</button>
-              </div>
-
-              {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
-            </div>
-          </Modal>
-        ) : null}
-
-        {editGroupOpen ? (
-          <Modal title="Editar grupo (parcelas)" onClose={fecharEditarGrupo}>
-            <div style={{ display: "grid", gap: 10 }}>
-              <div style={styles.modalGrid}>
-                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
-                  <span style={styles.labelTxt}>Descrição base</span>
-                  <input value={grpDescricaoBase} onChange={(e) => setGrpDescricaoBase(e.target.value)} style={styles.input} />
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Tipo</span>
-                  <select
-                    value={grpTipo}
-                    onChange={(e) => {
-                      const t = e.target.value;
-                      setGrpTipo(t);
-                      const cats = t === "despesa" ? categoriasDespesa : categoriasReceita;
-                      if (!cats.includes(grpCategoria)) setGrpCategoria(cats[0] || "Outros");
-                    }}
-                    style={styles.select}
-                  >
-                    <option value="despesa">Despesa</option>
-                    <option value="receita">Receita</option>
-                  </select>
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Categoria</span>
-                  <select value={grpCategoria} onChange={(e) => setGrpCategoria(e.target.value)} style={styles.select}>
-                    {(categoriasGrupo || []).map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Conta</span>
-                  <select value={grpContaId || ""} onChange={(e) => setGrpContaId(e.target.value || null)} style={styles.select}>
-                    <option value="">Sem conta</option>
-                    {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </select>
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Modo</span>
-                  <select value={grpModo} onChange={(e) => setGrpModo(e.target.value)} style={styles.select}>
-                    <option value="parcela">Valor por parcela</option>
-                    <option value="dividir">Dividir total</option>
-                  </select>
-                </label>
-
-                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
-                  <span style={styles.labelTxt}>{grpModo === "dividir" ? "Valor total" : "Valor por parcela"}</span>
-                  <input value={grpValor} onChange={(e) => setGrpValor(e.target.value)} style={styles.input} />
-                </label>
-              </div>
-
-              <div style={styles.modalFooterSticky}>
-                <button onClick={fecharEditarGrupo} style={styles.secondaryBtn} type="button">Cancelar</button>
-                <button onClick={salvarEdicaoGrupo} style={styles.primaryBtn} disabled={!canWrite} type="button">✅ Salvar grupo</button>
-              </div>
-
-              {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
-            </div>
-          </Modal>
-        ) : null}
-
-        {editContaOpen ? (
-          <Modal title="Editar conta" onClose={fecharEditarConta}>
-            <div style={{ display: "grid", gap: 10 }}>
-              <div style={styles.modalGrid}>
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Nome</span>
-                  <input value={editContaNome} onChange={(e) => setEditContaNome(e.target.value)} style={styles.input} />
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Tipo</span>
-                  <select value={editContaTipo} onChange={(e) => setEditContaTipo(e.target.value)} style={styles.select}>
-                    <option value="corrente">Conta corrente</option>
-                    <option value="poupanca">Poupança</option>
-                    <option value="cartao">Cartão</option>
-                    <option value="invest">Investimentos</option>
-                    <option value="outros">Outros</option>
-                  </select>
-                </label>
-
-                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
-                  <span style={styles.labelTxt}>Saldo inicial</span>
-                  <input value={editContaSaldo} onChange={(e) => setEditContaSaldo(e.target.value)} style={styles.input} />
-                </label>
-              </div>
-
-              <div style={styles.modalFooterSticky}>
-                <button onClick={fecharEditarConta} style={styles.secondaryBtn} type="button">Cancelar</button>
-                <button onClick={salvarEdicaoConta} style={styles.primaryBtn} disabled={!canWrite} type="button">✅ Salvar</button>
-              </div>
-
-              {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
-            </div>
-          </Modal>
-        ) : null}
-
-        {editFixaOpen ? (
-          <Modal title="Editar fixa" onClose={fecharEditarFixa}>
-            <div style={{ display: "grid", gap: 10 }}>
-              <div style={styles.modalGrid}>
-                <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
-                  <span style={styles.labelTxt}>Descrição</span>
-                  <input value={editFixaDescricao} onChange={(e) => setEditFixaDescricao(e.target.value)} style={styles.input} />
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Valor</span>
-                  <input value={editFixaValor} onChange={(e) => setEditFixaValor(e.target.value)} style={styles.input} />
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Tipo</span>
-                  <select value={editFixaTipo} onChange={(e) => setEditFixaTipo(e.target.value)} style={styles.select}>
-                    <option value="despesa">Despesa</option>
-                    <option value="receita">Receita</option>
-                  </select>
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Categoria</span>
-                  <select value={editFixaCategoria} onChange={(e) => setEditFixaCategoria(e.target.value)} style={styles.select}>
-                    {(categoriasFixaEdit || []).map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Dia venc.</span>
-                  <input value={editFixaDia} onChange={(e) => setEditFixaDia(e.target.value)} style={styles.input} inputMode="numeric" />
-                </label>
-
-                <label style={styles.label}>
-                  <span style={styles.labelTxt}>Conta</span>
-                  <select value={editFixaContaId || ""} onChange={(e) => setEditFixaContaId(e.target.value || null)} style={styles.select}>
-                    <option value="">Sem conta</option>
-                    {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </select>
-                </label>
-              </div>
-
-              <div style={styles.modalFooterSticky}>
-                <button onClick={fecharEditarFixa} style={styles.secondaryBtn} type="button">Cancelar</button>
-                <button onClick={salvarEdicaoFixa} style={styles.primaryBtn} disabled={!canWrite} type="button">✅ Salvar</button>
-              </div>
-
-              {!canWrite ? <div style={styles.lockNote}>🔒 Modo leitura: edição bloqueada</div> : null}
-            </div>
-          </Modal>
-        ) : null}
+        {/* continua na Parte 3/3 */}
       </div>
     </div>
   );
 }
-
-/* ---------------------------
-   PortalMenu (menus ⋮ mobile-safe)
----------------------------- */
-function PortalMenu({ anchorEl, children, onClose }) {
-  const [pos, setPos] = useState(null);
-
-  useEffect(() => {
-    function calc() {
-      if (!anchorEl) return setPos(null);
-      const r = anchorEl.getBoundingClientRect();
-      const vw = window.innerWidth || 360;
-      const vh = window.innerHeight || 640;
-
-      const desiredW = 260;
-      const x = Math.min(vw - desiredW - 10, Math.max(10, r.right - desiredW));
-      const y = Math.min(vh - 10, Math.max(10, r.bottom + 8));
-
-      setPos({ x, y, w: desiredW });
-    }
-
-    calc();
-    window.addEventListener("resize", calc);
-    window.addEventListener("scroll", calc, true);
-    return () => {
-      window.removeEventListener("resize", calc);
-      window.removeEventListener("scroll", calc, true);
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "var(--bg)",
+    color: "var(--text)",
+  },
+  container: {
+    width: "min(1120px, 100%)",
+    margin: "0 auto",
+    padding: "18px 12px 56px",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    marginBottom: 14,
+    flexWrap: "wrap",
+  },
+  gridTop: {
+    display: "grid",
+    gap: 12,
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    marginTop: 12,
+    marginBottom: 10,
+  },
+  card: {
+    background: "var(--card)",
+    border: "1px solid var(--border)",
+    borderRadius: 18,
+    padding: 14,
+    boxShadow: "var(--shadow)",
+  },
+  row: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    padding: "12px 12px",
+    background: "var(--card)",
+    border: "1px solid var(--border)",
+    borderRadius: 18,
+    boxShadow: "var(--shadowSoft, var(--shadow))",
+  },
+  kpiLabel: {
+    color: "var(--muted)",
+    fontSize: 12,
+    fontWeight: 1000,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  kpiValue: {
+    fontSize: 22,
+    fontWeight: 1200,
+    marginTop: 6,
+    letterSpacing: -0.2,
+  },
+  kpiHint: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: 900,
+    color: "var(--muted)",
+  },
+  badgeMonthYear: {
+    padding: "4px 10px",
+    borderRadius: 999,
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    fontWeight: 1100,
+    fontSize: 12,
+  },
+  badgeLight: {
+    padding: "3px 10px",
+    borderRadius: 999,
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    fontWeight: 1000,
+    fontSize: 12,
+    color: "var(--muted)",
+  },
+  primaryBtn: {
+    border: "1px solid var(--accent)",
+    background: "var(--accent)",
+    color: "white",
+    fontWeight: 1100,
+    borderRadius: 14,
+    padding: "10px 14px",
+    cursor: "pointer",
+    boxShadow: "var(--shadow)",
+    whiteSpace: "nowrap",
+  },
+  secondaryBtn: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    fontWeight: 1100,
+    borderRadius: 14,
+    padding: "10px 14px",
+    cursor: "pointer",
+    boxShadow: "var(--shadow)",
+    whiteSpace: "nowrap",
+  },
+  iconButton: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    borderRadius: 14,
+    width: 42,
+    height: 42,
+    cursor: "pointer",
+    boxShadow: "var(--shadow)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 18,
+    fontWeight: 1200,
+  },
+  iconButtonCompact: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    borderRadius: 14,
+    width: 42,
+    height: 42,
+    cursor: "pointer",
+    boxShadow: "var(--shadow)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 16,
+    fontWeight: 1200,
+  },
+  input: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    borderRadius: 14,
+    padding: "10px 12px",
+    outline: "none",
+    fontWeight: 1000,
+    minWidth: 160,
+  },
+  select: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    borderRadius: 14,
+    padding: "10px 12px",
+    outline: "none",
+    fontWeight: 1000,
+    minWidth: 180,
+  },
+  selectCompact: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    borderRadius: 14,
+    padding: "10px 12px",
+    outline: "none",
+    fontWeight: 1000,
+    minWidth: 160,
+  },
+  formRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  chip: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    borderRadius: 999,
+    padding: "8px 12px",
+    cursor: "pointer",
+    fontWeight: 1100,
+    boxShadow: "var(--shadow)",
+  },
+  chipActive: {
+    borderColor: "var(--accent)",
+    boxShadow: "0 0 0 3px rgba(34,197,94,.18)",
+  },
+  pendente: {
+    color: "var(--danger)",
+    fontWeight: 1100,
+  },
+  pago: {
+    color: "var(--success)",
+    fontWeight: 1100,
+  },
+  alertPill: (tone) => {
+    const base = {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "6px 10px",
+      borderRadius: 999,
+      border: "1px solid var(--border)",
+      background: "var(--controlBg2)",
+      fontWeight: 1100,
+      fontSize: 12,
     };
-  }, [anchorEl]);
 
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") onClose?.();
+    if (tone === "danger") return { ...base, borderColor: "rgba(239,68,68,.45)", background: "rgba(239,68,68,.12)" };
+    if (tone === "warn") return { ...base, borderColor: "rgba(245,158,11,.45)", background: "rgba(245,158,11,.10)" };
+    if (tone === "info") return { ...base, borderColor: "rgba(59,130,246,.45)", background: "rgba(59,130,246,.10)" };
+    if (tone === "muted") return { ...base, borderColor: "rgba(148,163,184,.45)", background: "rgba(148,163,184,.10)" };
+    return base;
+  },
+  pillType: (tipo) => {
+    const isRec = tipo === "receita";
+    return {
+      padding: "2px 10px",
+      borderRadius: 999,
+      border: `1px solid ${isRec ? "rgba(34,197,94,.55)" : "rgba(239,68,68,.55)"}`,
+      background: isRec ? "rgba(34,197,94,.10)" : "rgba(239,68,68,.10)",
+      color: isRec ? "rgba(34,197,94,1)" : "rgba(239,68,68,1)",
+      fontWeight: 1200,
+      fontSize: 12,
+      letterSpacing: 0.4,
+    };
+  },
+  checkLabel: {
+    display: "inline-flex",
+    gap: 8,
+    alignItems: "center",
+    fontWeight: 1000,
+    color: "var(--text)",
+    userSelect: "none",
+  },
+  lockInline: {
+    color: "rgba(239,68,68,1)",
+    fontWeight: 1100,
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,.55)",
+    backdropFilter: "blur(3px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+    padding: 12,
+  },
+  modalCard: {
+    width: "min(760px, 100%)",
+    maxHeight: "85vh",
+    background: "var(--card)",
+    border: "1px solid var(--border)",
+    borderRadius: 18,
+    boxShadow: "var(--shadow)",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+  },
+  modalHeaderSticky: {
+    padding: "12px 12px",
+    borderBottom: "1px solid var(--border)",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    background: "var(--card)",
+    position: "sticky",
+    top: 0,
+    zIndex: 2,
+  },
+  modalBodyScroll: {
+    padding: 12,
+    overflow: "auto",
+  },
+};
+
+function globalCss() {
+  return `
+    :root{
+      --bg:#0b1220;
+      --card:#0f1a2f;
+      --text:#e7eefc;
+      --muted:#a7b3c7;
+      --border:rgba(148,163,184,.18);
+      --controlBg:rgba(255,255,255,.06);
+      --controlBg2:rgba(255,255,255,.08);
+      --accent:#22c55e;
+      --danger:#ef4444;
+      --success:#22c55e;
+      --shadow: 0 18px 55px rgba(0,0,0,.28);
+      --shadowSoft: 0 10px 30px rgba(0,0,0,.18);
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
-  if (!pos) return null;
+    @media (max-width: 920px){
+      .gfd-gridTopFix { grid-template-columns: 1fr !important; }
+    }
 
+    input, select, button { font-family: inherit; }
+    * { box-sizing: border-box; }
+
+    @media (max-width: 920px){
+      body{ overflow-x:hidden; }
+    }
+  `;
+}
+
+function CollapseSection({ id, title, subtitle, open, onToggle, rightSlot, children }) {
   return (
-    <div
-      style={{ ...styles.menuOverlay, touchAction: "manipulation" }}
-      data-gfd-portalmenu="1"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
-      }}
-    >
-      <div
-        style={{ ...styles.menuFloating, left: pos.x, top: pos.y, width: pos.w }}
-        data-gfd-portalmenu="1"
+    <div style={{ marginTop: 10 }}>
+      <button
+        onClick={onToggle}
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          padding: "12px 12px",
+          borderRadius: 18,
+          border: "1px solid var(--border)",
+          background: "var(--card)",
+          color: "var(--text)",
+          cursor: "pointer",
+          boxShadow: "var(--shadowSoft, var(--shadow))",
+        }}
       >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <span style={{ fontWeight: 1200, fontSize: 14, whiteSpace: "nowrap" }}>{title}</span>
+          <span style={{
+            padding: "3px 10px",
+            borderRadius: 999,
+            border: "1px solid var(--border)",
+            background: "var(--controlBg)",
+            color: "var(--muted)",
+            fontWeight: 1100,
+            fontSize: 12,
+          }}>
+            {subtitle}
+          </span>
+          {rightSlot ? <span style={{ marginLeft: 8 }}>{rightSlot}</span> : null}
+        </div>
+
+        <span style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 40,
+          height: 40,
+          borderRadius: 14,
+          border: "1px solid var(--border)",
+          background: "var(--controlBg)",
+          boxShadow: "var(--shadow)",
+          fontWeight: 1200,
+        }}>
+          {open ? "−" : "+"}
+        </span>
+      </button>
+
+      <div id={id} style={{ display: open ? "block" : "none" }}>
         {children}
       </div>
     </div>
   );
 }
 
-/* ---------------------------
-   Styles + CSS Global
----------------------------- */
-const styles = {
-  page: { padding: 12, color: "var(--text)" },
-  container: { maxWidth: 1180, margin: "0 auto" },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    flexWrap: "wrap",
-    alignItems: "flex-start",
-    marginBottom: 10,
-  },
-
-  gridTop: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 10,
-    marginTop: 10,
-    marginBottom: 10,
-  },
-
-  card: {
-    border: "1px solid var(--border)",
-    background: "var(--card)",
-    borderRadius: 16,
-    padding: 12,
-    boxShadow: "var(--shadowSoft)",
-  },
-
-  row: {
-    border: "1px solid var(--border)",
-    background: "var(--card)",
-    borderRadius: 16,
-    padding: 12,
-    boxShadow: "var(--shadowSoft)",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 10,
-    alignItems: "center",
-  },
-
-  formRow: { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" },
-
-  kpiLabel: { color: "var(--muted)", fontWeight: 1000, fontSize: 12 },
-  kpiValue: { marginTop: 6, fontWeight: 1100, fontSize: 26, letterSpacing: -0.4 },
-  kpiHint: { marginTop: 6, color: "var(--muted)", fontWeight: 900, fontSize: 12 },
-
-  label: { display: "grid", gap: 6 },
-  labelTxt: { fontSize: 12, fontWeight: 950, color: "var(--muted)" },
-
-  input: {
-    border: "1px solid var(--border)",
-    background: "var(--controlBg)",
-    color: "var(--text)",
-    borderRadius: 12,
-    padding: "10px 12px",
-    outline: "none",
-    fontWeight: 900,
-    width: "100%",
-    boxSizing: "border-box",
-  },
-
-  select: {
-    border: "1px solid var(--border)",
-    background: "var(--controlBg)",
-    color: "var(--text)",
-    borderRadius: 12,
-    padding: "10px 12px",
-    outline: "none",
-    fontWeight: 900,
-  },
-
-  selectCompact: {
-    border: "1px solid var(--border)",
-    background: "var(--controlBg)",
-    color: "var(--text)",
-    borderRadius: 12,
-    padding: "10px 10px",
-    outline: "none",
-    fontWeight: 900,
-  },
-
-  iconButtonCompact: {
-    border: "1px solid var(--border)",
-    background: "var(--controlBg)",
-    color: "var(--text)",
-    borderRadius: 12,
-    padding: "10px 10px",
-    cursor: "pointer",
-    fontWeight: 1000,
-  },
-
-  primaryBtn: {
-    border: "1px solid var(--tabActiveBorder)",
-    background: "var(--tabActiveBg)",
-    color: "var(--text)",
-    padding: "10px 12px",
-    borderRadius: 12,
-    cursor: "pointer",
-    fontWeight: 1000,
-    touchAction: "manipulation",
-  },
-
-  secondaryBtn: {
-    border: "1px solid var(--border)",
-    background: "var(--controlBg)",
-    color: "var(--text)",
-    padding: "10px 12px",
-    borderRadius: 12,
-    cursor: "pointer",
-    fontWeight: 1000,
-    touchAction: "manipulation",
-  },
-
-  iconButton: {
-    border: "1px solid var(--border)",
-    background: "var(--controlBg)",
-    color: "var(--text)",
-    padding: "10px 12px",
-    borderRadius: 12,
-    cursor: "pointer",
-    fontWeight: 1100,
-    lineHeight: 1,
-    touchAction: "manipulation",
-  },
-
-  badgeMonthYear: {
-    border: "1px solid var(--border)",
-    background: "var(--card2)",
-    borderRadius: 999,
-    padding: "4px 10px",
-    fontWeight: 1000,
-    color: "var(--text)",
-    fontSize: 12,
-  },
-
-  badgeLight: {
-    border: "1px solid var(--border)",
-    background: "var(--card2)",
-    borderRadius: 999,
-    padding: "4px 10px",
-    fontWeight: 1000,
-    fontSize: 12,
-    color: "var(--text)",
-  },
-
-  lockInline: {
-    color: "var(--muted)",
-    fontWeight: 900,
-    fontSize: 12,
-  },
-
-  lockNote: {
-    border: "1px solid rgba(239,68,68,.35)",
-    background: "rgba(239,68,68,.08)",
-    padding: "10px 12px",
-    borderRadius: 12,
-    fontWeight: 1000,
-    color: "var(--text)",
-  },
-
-  checkLabel: {
-    display: "flex",
-    gap: 8,
-    alignItems: "center",
-    color: "var(--muted)",
-    fontWeight: 1000,
-    userSelect: "none",
-  },
-
-  chip: {
-    border: "1px solid var(--border)",
-    background: "var(--controlBg)",
-    color: "var(--text)",
-    padding: "8px 12px",
-    borderRadius: 999,
-    cursor: "pointer",
-    fontWeight: 1000,
-    fontSize: 12,
-    touchAction: "manipulation",
-  },
-
-  chipActive: {
-    borderColor: "var(--tabActiveBorder)",
-    background: "var(--tabActiveBg)",
-  },
-
-  pendente: { color: "rgba(245,158,11,1)", fontWeight: 1000, fontSize: 12 },
-  pago: { color: "rgba(34,197,94,1)", fontWeight: 1000, fontSize: 12 },
-
-  pillType: (tipo) => ({
-    padding: "2px 10px",
-    borderRadius: 999,
-    border: "1px solid var(--border)",
-    background: tipo === "receita" ? "rgba(34,197,94,.10)" : "rgba(239,68,68,.08)",
-    color: "var(--text)",
-    fontWeight: 1100,
-    fontSize: 12,
-  }),
-
-  alertPill: (kind) => {
-    const map = {
-      danger: { bg: "rgba(239,68,68,.10)", bd: "rgba(239,68,68,.35)" },
-      warn: { bg: "rgba(245,158,11,.10)", bd: "rgba(245,158,11,.35)" },
-      info: { bg: "rgba(59,130,246,.10)", bd: "rgba(59,130,246,.35)" },
-      muted: { bg: "rgba(255,255,255,.06)", bd: "rgba(255,255,255,.12)" },
-    };
-    const c = map[kind] || map.muted;
-    return {
-      border: `1px solid ${c.bd}`,
-      background: c.bg,
-      color: "var(--text)",
-      borderRadius: 999,
-      padding: "6px 10px",
-      fontWeight: 1000,
-      fontSize: 12,
-    };
-  },
-
-  menuOverlay: {
-    position: "fixed",
-    inset: 0,
-    background: "transparent",
-    zIndex: 60,
-  },
-  menuFloating: {
-    position: "fixed",
-    borderRadius: 16,
-    border: "1px solid var(--border)",
-    background: "var(--card)",
-    boxShadow: "0 18px 50px rgba(0,0,0,.30)",
-    padding: 10,
-    maxHeight: "min(60vh, 460px)",
-    overflow: "auto",
-    WebkitOverflowScrolling: "touch",
-  },
-  menuBox: { display: "grid", gap: 8 },
-
-  modalOverlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,.55)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding:
-      "max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))",
-    zIndex: 70,
-  },
-
-  modalCard: {
-    width: "min(920px, 100%)",
-    maxHeight: "min(90dvh, 720px)",
-    borderRadius: 18,
-    border: "1px solid var(--border)",
-    background: "var(--card)",
-    color: "var(--text)",
-    boxShadow: "0 18px 40px rgba(0,0,0,.28)",
-    display: "grid",
-    gridTemplateRows: "auto 1fr",
-    overflow: "hidden",
-  },
-
-  modalHeaderSticky: {
-    position: "sticky",
-    top: 0,
-    zIndex: 2,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    padding: "12px 12px",
-    borderBottom: "1px solid var(--border)",
-    background: "var(--card)",
-  },
-
-  modalBodyScroll: {
-    padding: 12,
-    overflow: "auto",
-    WebkitOverflowScrolling: "touch",
-    minHeight: 0,
-  },
-
-  modalGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-
-  modalFooterSticky: {
-    position: "sticky",
-    bottom: 0,
-    zIndex: 2,
-    padding: 12,
-    display: "flex",
-    gap: 10,
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-    borderTop: "1px solid var(--border)",
-    background: "var(--card)",
-  },
-};
-
-function globalCss() {
-  return `
-    @media (max-width: 720px){
-      .gfd-hide-mobile { display: none !important; }
-    }
-
-    @media (max-width: 640px){
-      [style*="grid-template-columns: repeat(2"]{
-        grid-template-columns: 1fr !important;
-      }
-    }
-  `;
+function downloadText(filename, text, mime) {
+  const blob = new Blob([text], { type: mime || "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "arquivo.txt";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
 }
+
+function buildCsv(rows) {
+  const header = ["data", "tipo", "categoria", "descricao", "valor", "pago", "conta_id", "parcelado", "parcela_num", "parcela_total", "parcela_grupo"];
+  const escape = (s) => {
+    const t = String(s ?? "");
+    if (/[",\n;]/.test(t)) return `"${t.replaceAll('"', '""')}"`;
+    return t;
+  };
+
+  const lines = [header.join(";")];
+
+  for (const r of rows || []) {
+    const line = [
+      r.data,
+      r.tipo,
+      r.categoria,
+      r.descricao,
+      r.valor,
+      r.pago ? "1" : "0",
+      r.conta_id ?? "",
+      r.parcelado ? "1" : "0",
+      r.parcela_num ?? "",
+      r.parcela_total ?? "",
+      r.parcela_grupo ?? "",
+    ].map(escape).join(";");
+    lines.push(line);
+  }
+
+  return lines.join("\n");
+}
+
