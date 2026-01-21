@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 
 function money(n) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
-    .format(Number(n || 0));
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+    Number(n || 0)
+  );
 }
 
 function ymd(d) {
@@ -44,23 +45,28 @@ function clampDateStr(s) {
   return toYmdFromAnyInput(s);
 }
 
-function clampNumber(v) {
+function parsePtBrNumber(v) {
   if (v === null || v === undefined) return 0;
-  const s = String(v).replace(/\./g, "").replace(",", ".");
+  const s0 = String(v).trim();
+  if (!s0) return 0;
+
+  const s = s0
+    .replace(/\s/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .replace(/[^\d.-]/g, "");
+
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
 
 function daysBetween(startYmd, endYmd) {
   if (!startYmd || !endYmd) return null;
-
   const a = parseYmdLocal(clampDateStr(startYmd));
   const b = parseYmdLocal(clampDateStr(endYmd));
   if (!a || !b) return null;
-
   a.setHours(0, 0, 0, 0);
   b.setHours(0, 0, 0, 0);
-
   const ms = b.getTime() - a.getTime();
   return Math.round(ms / (1000 * 60 * 60 * 24));
 }
@@ -91,7 +97,6 @@ function startEndMonthYmd(ano, mes) {
 
 function pickMotivation({ pct, isLate, done, streak }) {
   const p = clampPct(pct);
-
   if (done) {
     const doneMsgs = [
       "Meta concluída! Você acabou de subir de nível. 🏆",
@@ -130,9 +135,7 @@ function weekKey(dOrYmd) {
     const week1 = new Date(dt.getFullYear(), 0, 4);
     const weekNo =
       1 +
-      Math.round(
-        ((dt - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7
-      );
+      Math.round(((dt - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
     return `${dt.getFullYear()}-W${String(weekNo).padStart(2, "0")}`;
   }
 
@@ -146,9 +149,7 @@ function weekKey(dOrYmd) {
   const week1 = new Date(dt.getFullYear(), 0, 4);
   const weekNo =
     1 +
-    Math.round(
-      ((dt - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7
-    );
+    Math.round(((dt - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
   return `${dt.getFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
@@ -163,7 +164,8 @@ function calcStreak(keysSet, freq) {
       if (!keysSet.has(cur)) break;
       s++;
       const [yy, ww] = cur.split("-W");
-      const y = Number(yy), w = Number(ww);
+      const y = Number(yy),
+        w = Number(ww);
 
       const dt = new Date(y, 0, 1 + (w - 1) * 7);
       dt.setDate(dt.getDate() - 7);
@@ -175,7 +177,6 @@ function calcStreak(keysSet, freq) {
   let dt = new Date();
   dt.setHours(0, 0, 0, 0);
   let s = 0;
-
   for (let i = 0; i < 400; i++) {
     const k = ymd(dt);
     if (!keysSet.has(k)) break;
@@ -215,9 +216,30 @@ async function pedirPermissaoNotif() {
 }
 
 const ICONES_SUGERIDOS = [
-  "🎯", "💰", "🏦", "📈", "🧾", "💳", "🏠", "🚗",
-  "✈️", "🎓", "🩺", "🛒", "🍽️", "🎮", "📚", "🔧",
-  "👶", "🐶", "🏋️", "🎁", "🧠", "💡", "🔥", "🌱",
+  "🎯",
+  "💰",
+  "🏦",
+  "📈",
+  "🧾",
+  "💳",
+  "🏠",
+  "🚗",
+  "✈️",
+  "🎓",
+  "🩺",
+  "🛒",
+  "🍽️",
+  "🎮",
+  "📚",
+  "🔧",
+  "👶",
+  "🐶",
+  "🏋️",
+  "🎁",
+  "🧠",
+  "💡",
+  "🔥",
+  "🌱",
 ];
 
 export default function Metas({ canWrite = false }) {
@@ -247,19 +269,11 @@ export default function Metas({ canWrite = false }) {
   const [metas, setMetas] = useState([]);
   const [movs, setMovs] = useState([]);
   const [checkins, setCheckins] = useState([]);
-
   const [gastosCategorias, setGastosCategorias] = useState(new Map());
   const [categoriasLanc, setCategoriasLanc] = useState([]);
 
-  const [iconsOpen, setIconsOpen] = useState(false);
-  const [iconsTarget, setIconsTarget] = useState(null);
-  const [iconsSelected, setIconsSelected] = useState("🎯");
-
-  function openIconPicker({ mode, metaId, current }) {
-    setIconsTarget({ mode, metaId: metaId ?? null });
-    setIconsSelected((current || "🎯").slice(0, 4));
-    setIconsOpen(true);
-  }
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [iconPickerMode, setIconPickerMode] = useState("new");
 
   async function carregarGastosCategoriasMes() {
     if (!user) return new Map();
@@ -313,7 +327,7 @@ export default function Metas({ canWrite = false }) {
       return;
     }
 
-    const ids = (metasData || []).map(m => m.id);
+    const ids = (metasData || []).map((m) => m.id);
 
     let movsData = [];
     if (ids.length > 0) {
@@ -324,7 +338,7 @@ export default function Metas({ canWrite = false }) {
         .in("meta_id", ids)
         .order("data", { ascending: true });
 
-      movsData = mmErr ? [] : (mm || []);
+      movsData = mmErr ? [] : mm || [];
       if (mmErr) console.error("Erro carregar movs:", mmErr);
     }
 
@@ -337,7 +351,7 @@ export default function Metas({ canWrite = false }) {
         .in("meta_id", ids)
         .order("data", { ascending: true });
 
-      checkData = ccErr ? [] : (cc || []);
+      checkData = ccErr ? [] : cc || [];
       if (ccErr) console.error("Erro carregar checkins:", ccErr);
     }
 
@@ -364,11 +378,25 @@ export default function Metas({ canWrite = false }) {
   const [mFim, setMFim] = useState("");
   const [mIcone, setMIcone] = useState("🎯");
   const [mCor, setMCor] = useState("#2563EB");
+  const [mIconeCustom, setMIconeCustom] = useState("");
   const [mCategoriaLimite, setMCategoriaLimite] = useState("Outros");
   const [mDesafioAtivo, setMDesafioAtivo] = useState(false);
   const [mDesafioFreq, setMDesafioFreq] = useState("semanal");
   const [mLembreteAtivo, setMLembreteAtivo] = useState(false);
   const [mLembreteHora, setMLembreteHora] = useState("08:30");
+
+  function openIconPicker(mode) {
+    setIconPickerMode(mode);
+    setIconPickerOpen(true);
+  }
+
+  function selectedNewIcon() {
+    return (String(mIconeCustom || "").trim() || mIcone || "🎯").slice(0, 4);
+  }
+
+  function selectedEditIcon() {
+    return (String(eIconeCustom || "").trim() || eIcone || "🎯").slice(0, 4);
+  }
 
   async function criarMeta() {
     if (!user) return;
@@ -378,13 +406,13 @@ export default function Metas({ canWrite = false }) {
     }
 
     const titulo = String(mTitulo || "").trim();
-    const alvo = clampNumber(mAlvo);
-    const inicial = clampNumber(mInicial);
+    const alvo = parsePtBrNumber(mAlvo);
+    const inicial = parsePtBrNumber(mInicial);
 
     const inicio = clampDateStr(mInicio) || hojeYmd;
     const fim = clampDateStr(mFim);
 
-    const iconeFinal = (String(mIcone || "🎯").trim() || "🎯").slice(0, 4);
+    const iconeFinal = selectedNewIcon();
 
     if (!titulo) {
       alert("Informe um nome para a meta.");
@@ -413,19 +441,15 @@ export default function Metas({ canWrite = false }) {
       cor: mCor || "#2563EB",
       ativo: true,
       modo_limite_auto: modoLimiteAuto,
-      limite_categoria: modoLimiteAuto ? (mCategoriaLimite || "Outros") : null,
+      limite_categoria: modoLimiteAuto ? mCategoriaLimite || "Outros" : null,
       limite_periodo: "mensal",
       desafio_ativo: !!mDesafioAtivo,
       desafio_freq: mDesafioFreq || "semanal",
       lembrete_ativo: !!mLembreteAtivo,
-      lembrete_hora: mLembreteAtivo ? (mLembreteHora || "08:30") : null,
+      lembrete_hora: mLembreteAtivo ? mLembreteHora || "08:30" : null,
     };
 
-    const { data, error } = await supabase
-      .from("metas")
-      .insert(payload)
-      .select("*")
-      .single();
+    const { data, error } = await supabase.from("metas").insert(payload).select("*").single();
 
     if (error) {
       console.error("Erro criar meta:", error);
@@ -434,15 +458,13 @@ export default function Metas({ canWrite = false }) {
     }
 
     if (!modoLimiteAuto && inicial > 0) {
-      const { error: e2 } = await supabase
-        .from("metas_mov")
-        .insert({
-          user_id: user.id,
-          meta_id: data.id,
-          data: inicio,
-          valor: inicial,
-          nota: "Valor inicial",
-        });
+      const { error: e2 } = await supabase.from("metas_mov").insert({
+        user_id: user.id,
+        meta_id: data.id,
+        data: inicio,
+        valor: inicial,
+        nota: "Valor inicial",
+      });
       if (e2) console.error("Erro mov inicial:", e2);
     }
 
@@ -453,18 +475,18 @@ export default function Metas({ canWrite = false }) {
     setMFim("");
     setMIcone("🎯");
     setMCor("#2563EB");
+    setMIconeCustom("");
     setMCategoriaLimite("Outros");
     setMDesafioAtivo(false);
     setMDesafioFreq("semanal");
     setMLembreteAtivo(false);
     setMLembreteHora("08:30");
 
+    setIconPickerOpen(false);
     await carregarTudo();
     setUiShowAtivas(true);
     alert("✅ Meta criada!");
   }
-
-
   const movsByMeta = useMemo(() => {
     const map = new Map();
     for (const mv of movs || []) {
@@ -484,7 +506,7 @@ export default function Metas({ canWrite = false }) {
   }, [checkins]);
 
   const metasView = useMemo(() => {
-    const list = (metas || []).map(m => {
+    const list = (metas || []).map((m) => {
       const mvs = movsByMeta.get(m.id) || [];
       const cks = checkinsByMeta.get(m.id) || [];
 
@@ -500,7 +522,7 @@ export default function Metas({ canWrite = false }) {
         const gasto = Number(gastosCategorias.get(m.limite_categoria || "Outros") || 0);
         atual = gasto;
         pct = alvo > 0 ? (gasto / alvo) * 100 : 0;
-        done = alvo > 0 ? (gasto <= alvo) : true;
+        done = alvo > 0 ? gasto <= alvo : true;
         falta = Math.max(0, alvo - gasto);
       } else {
         const somaMovs = mvs.reduce((s, x) => s + (Number(x.valor) || 0), 0);
@@ -516,15 +538,18 @@ export default function Metas({ canWrite = false }) {
       }
 
       const diasRest = m.data_fim ? daysBetween(hojeYmd, m.data_fim) : null;
-      const isLate = (diasRest !== null && diasRest < 0 && !done && !modoLimiteAuto);
+      const isLate = diasRest !== null && diasRest < 0 && !done && !modoLimiteAuto;
 
       let porMes = null;
+      let porSemana = null;
 
       if (m.data_fim && diasRest !== null && diasRest >= 0) {
         const faltaCalc = modoLimiteAuto ? Math.max(0, atual - alvo) : falta;
         if (faltaCalc > 0) {
           const mesesCalc = Math.max(1, Math.ceil(diasRest / 30));
+          const semanasCalc = Math.max(1, Math.ceil(diasRest / 7));
           porMes = faltaCalc / mesesCalc;
+          porSemana = faltaCalc / semanasCalc;
         }
       }
 
@@ -532,7 +557,6 @@ export default function Metas({ canWrite = false }) {
       if (m.desafio_ativo) {
         const freq = m.desafio_freq || "semanal";
         const set = new Set();
-
         for (const ck of cks) {
           if (!ck?.data) continue;
           if (freq === "semanal") set.add(weekKey(ck.data));
@@ -544,8 +568,8 @@ export default function Metas({ canWrite = false }) {
       const motivational = pickMotivation({
         pct,
         isLate,
-        done: (modoLimiteAuto ? (alvo > 0 ? atual <= alvo : true) : done),
-        streak
+        done: modoLimiteAuto ? (alvo > 0 ? atual <= alvo : true) : done,
+        streak,
       });
 
       return {
@@ -557,7 +581,10 @@ export default function Metas({ canWrite = false }) {
         diasRest,
         isLate,
         porMes,
+        porSemana,
         motivational,
+        lastMov: mvs.length ? mvs[mvs.length - 1] : null,
+        movCount: mvs.length,
         streak,
         modoLimiteAuto,
       };
@@ -568,32 +595,45 @@ export default function Metas({ canWrite = false }) {
       const bb = b.ativo ? 0 : 1;
       if (aa !== bb) return aa - bb;
 
-      const ap = Number(a.pct || 0);
-      const bp = Number(b.pct || 0);
-      if (bp !== ap) return bp - ap;
+      if (a.modoLimiteAuto || b.modoLimiteAuto) {
+        const ap = Number(a.pct || 0);
+        const bp = Number(b.pct || 0);
+        if (bp !== ap) return bp - ap;
+      } else {
+        if (b.pct !== a.pct) return b.pct - a.pct;
+      }
 
       return String(b.criado_em || "").localeCompare(String(a.criado_em || ""));
     });
   }, [metas, movsByMeta, checkinsByMeta, hojeYmd, gastosCategorias]);
 
-  const metasAtivas = useMemo(() => metasView.filter(m => m.ativo), [metasView]);
-  const metasArquivadas = useMemo(() => metasView.filter(m => !m.ativo), [metasView]);
+  const metasAtivas = useMemo(() => metasView.filter((m) => m.ativo), [metasView]);
+  const metasArquivadas = useMemo(() => metasView.filter((m) => !m.ativo), [metasView]);
 
   const resumoTopo = useMemo(() => {
     const ativas = metasAtivas.length;
+
     const media =
       ativas > 0
-        ? metasAtivas.reduce((s, m) => s + clampPct(m.pct), 0) / ativas
+        ? metasAtivas.reduce((s, m) => {
+            const p = m.modoLimiteAuto ? clampPct(m.pct) : m.pct || 0;
+            return s + p;
+          }, 0) / ativas
         : 0;
 
     const destaque =
-      metasAtivas.slice().sort((a, b) => clampPct(b.pct) - clampPct(a.pct))[0] || null;
+      metasAtivas
+        .slice()
+        .sort((a, b) => {
+          const ap = a.modoLimiteAuto ? clampPct(a.pct) : a.pct || 0;
+          const bp = b.modoLimiteAuto ? clampPct(b.pct) : b.pct || 0;
+          return bp - ap;
+        })[0] || null;
 
     return { ativas, media, destaque };
   }, [metasAtivas]);
 
   const lastNotifiedRef = useRef(new Set());
-
   useEffect(() => {
     if (!user) return;
 
@@ -617,14 +657,6 @@ export default function Metas({ canWrite = false }) {
 
     return () => clearInterval(id);
   }, [user, metasView]);
-
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [detailsMeta, setDetailsMeta] = useState(null);
-
-  function openDetails(meta) {
-    setDetailsMeta(meta);
-    setDetailsOpen(true);
-  }
 
   const [addOpen, setAddOpen] = useState(false);
   const [addMeta, setAddMeta] = useState(null);
@@ -653,21 +685,19 @@ export default function Metas({ canWrite = false }) {
       return;
     }
 
-    const v = clampNumber(addValor);
+    const v = parsePtBrNumber(addValor);
     if (!(v > 0)) {
       alert("Informe um valor maior que zero.");
       return;
     }
 
-    const { error } = await supabase
-      .from("metas_mov")
-      .insert({
-        user_id: user.id,
-        meta_id: addMeta.id,
-        data: clampDateStr(addData) || hojeYmd,
-        valor: v,
-        nota: addNota ? String(addNota).slice(0, 200) : null,
-      });
+    const { error } = await supabase.from("metas_mov").insert({
+      user_id: user.id,
+      meta_id: addMeta.id,
+      data: clampDateStr(addData) || hojeYmd,
+      valor: v,
+      nota: addNota ? String(addNota).slice(0, 200) : null,
+    });
 
     if (error) {
       console.error("Erro add progresso:", error);
@@ -695,13 +725,11 @@ export default function Metas({ canWrite = false }) {
 
     const data = ymd(new Date());
 
-    const { error } = await supabase
-      .from("metas_checkins")
-      .insert({
-        user_id: user.id,
-        meta_id: meta.id,
-        data,
-      });
+    const { error } = await supabase.from("metas_checkins").insert({
+      user_id: user.id,
+      meta_id: meta.id,
+      data,
+    });
 
     if (error) {
       console.error("Erro check-in:", error);
@@ -711,6 +739,116 @@ export default function Metas({ canWrite = false }) {
 
     await carregarTudo();
     alert("✅ Check-in registrado! 🔥");
+  }
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editMeta, setEditMeta] = useState(null);
+
+  const [eTitulo, setETitulo] = useState("");
+  const [eTipo, setETipo] = useState("guardar");
+  const [eAlvo, setEAlvo] = useState("");
+  const [eInicio, setEInicio] = useState(hojeYmd);
+  const [eFim, setEFim] = useState("");
+  const [eIcone, setEIcone] = useState("🎯");
+  const [eCor, setECor] = useState("#2563EB");
+  const [eIconeCustom, setEIconeCustom] = useState("");
+  const [eModoLimiteAuto, setEModoLimiteAuto] = useState(false);
+  const [eCategoriaLimite, setECategoriaLimite] = useState("Outros");
+  const [eDesafioAtivo, setEDesafioAtivo] = useState(false);
+  const [eDesafioFreq, setEDesafioFreq] = useState("semanal");
+  const [eLembreteAtivo, setELembreteAtivo] = useState(false);
+  const [eLembreteHora, setELembreteHora] = useState("08:30");
+
+  function abrirEditar(meta) {
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para editar metas.");
+      return;
+    }
+
+    setEditMeta(meta);
+
+    setETitulo(meta.titulo || "");
+    setETipo(meta.tipo || "guardar");
+    setEAlvo(String(meta.valor_alvo ?? ""));
+    setEInicio(meta.data_inicio || hojeYmd);
+    setEFim(meta.data_fim || "");
+    setEIcone(meta.icone || "🎯");
+    setECor(meta.cor || "#2563EB");
+    setEIconeCustom("");
+
+    setEModoLimiteAuto(!!meta.modo_limite_auto);
+    setECategoriaLimite(meta.limite_categoria || "Outros");
+
+    setEDesafioAtivo(!!meta.desafio_ativo);
+    setEDesafioFreq(meta.desafio_freq || "semanal");
+
+    setELembreteAtivo(!!meta.lembrete_ativo);
+    setELembreteHora(meta.lembrete_hora || "08:30");
+
+    setEditOpen(true);
+  }
+
+  async function salvarEditar() {
+    if (!user || !editMeta) return;
+
+    if (!canMutate) {
+      alert("🔒 Somente leitura. Faça assinatura para salvar alterações.");
+      return;
+    }
+
+    const titulo = String(eTitulo || "").trim();
+    const alvo = parsePtBrNumber(eAlvo);
+
+    const inicio = clampDateStr(eInicio) || hojeYmd;
+    const fim = clampDateStr(eFim);
+
+    const iconeFinal = selectedEditIcon();
+
+    if (!titulo) {
+      alert("Informe um nome para a meta.");
+      return;
+    }
+    if (!(alvo > 0)) {
+      alert("Informe um valor alvo maior que zero.");
+      return;
+    }
+    if (fim && daysBetween(inicio, fim) < 0) {
+      alert("A data fim não pode ser menor que a data início.");
+      return;
+    }
+
+    const payload = {
+      titulo,
+      tipo: eTipo,
+      valor_alvo: alvo,
+      data_inicio: inicio,
+      data_fim: fim ? fim : null,
+      icone: iconeFinal,
+      cor: eCor || "#2563EB",
+      modo_limite_auto: !!eModoLimiteAuto,
+      limite_categoria: eModoLimiteAuto ? eCategoriaLimite || "Outros" : null,
+      limite_periodo: "mensal",
+      desafio_ativo: !!eDesafioAtivo,
+      desafio_freq: eDesafioFreq || "semanal",
+      lembrete_ativo: !!eLembreteAtivo,
+      lembrete_hora: eLembreteAtivo ? eLembreteHora || "08:30" : null,
+    };
+
+    const { error } = await supabase
+      .from("metas")
+      .update(payload)
+      .eq("id", editMeta.id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Erro editar meta:", error);
+      alert("Erro ao editar. Veja o console.");
+      return;
+    }
+
+    setEditOpen(false);
+    await carregarTudo();
+    alert("✅ Meta atualizada!");
   }
 
   async function arquivarMeta(meta) {
@@ -802,31 +940,6 @@ export default function Metas({ canWrite = false }) {
     alert("🗑️ Meta excluída!");
   }
 
-  async function salvarIconeParaMeta(metaId, icone) {
-    if (!user || !metaId) return;
-    if (!canMutate) {
-      alert("🔒 Somente leitura. Faça assinatura para editar metas.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("metas")
-      .update({ icone: (icone || "🎯").slice(0, 4) })
-      .eq("id", metaId)
-      .eq("user_id", user.id);
-
-    if (error) {
-      console.error("Erro salvar ícone:", error);
-      alert("Erro ao salvar ícone. Veja o console.");
-      return;
-    }
-
-    await carregarTudo();
-  }
-
-  if (!authReady) return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Carregando…</p>;
-  if (!user) return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Faça login novamente.</p>;
-
   const tiposCriacao = [
     { v: "guardar", label: "Guardar dinheiro" },
     { v: "pagar", label: "Pagar dívida" },
@@ -834,7 +947,11 @@ export default function Metas({ canWrite = false }) {
     { v: "limite_auto", label: "Limite por categoria (automático)" },
   ];
 
-  return (
+  if (!authReady)
+    return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Carregando…</p>;
+  if (!user)
+    return <p style={{ padding: 18, color: "var(--muted)", fontWeight: 900 }}>Faça login novamente.</p>;
+  const ui = (
     <div style={styles.page}>
       <div style={styles.frame}>
         <div style={styles.header}>
@@ -845,7 +962,7 @@ export default function Metas({ canWrite = false }) {
             </p>
 
             {!canMutate ? (
-              <div style={{ ...styles.readOnlyBar }}>
+              <div style={styles.readOnlyBar}>
                 🔒 Modo somente leitura (assinatura necessária para criar/editar/progresso/check-in)
               </div>
             ) : null}
@@ -889,10 +1006,18 @@ export default function Metas({ canWrite = false }) {
             </div>
             <div style={styles.cardHint}>
               {resumoTopo.destaque ? (
-                <>
-                  {money(resumoTopo.destaque.atual)} / {money(resumoTopo.destaque.valor_alvo)} •{" "}
-                  <b>{clampPct(resumoTopo.destaque.pct).toFixed(0)}%</b>
-                </>
+                resumoTopo.destaque.modoLimiteAuto ? (
+                  <>
+                    {money(resumoTopo.destaque.atual)} / {money(resumoTopo.destaque.valor_alvo)} •{" "}
+                    <b>{clampPct(resumoTopo.destaque.pct).toFixed(0)}%</b> •{" "}
+                    {resumoTopo.destaque.limite_categoria || "Categoria"}
+                  </>
+                ) : (
+                  <>
+                    {money(resumoTopo.destaque.atual)} / {money(resumoTopo.destaque.valor_alvo)} •{" "}
+                    <b>{resumoTopo.destaque.pct.toFixed(0)}%</b>
+                  </>
+                )
               ) : (
                 "Crie sua primeira meta e acompanhe o progresso."
               )}
@@ -909,7 +1034,7 @@ export default function Metas({ canWrite = false }) {
           title="Nova meta"
           subtitle="criar em 20 segundos"
           open={uiShowNova}
-          onToggle={() => setUiShowNova(v => !v)}
+          onToggle={() => setUiShowNova((v) => !v)}
         >
           <div style={{ ...styles.cardPad, padding: 12 }}>
             <div style={styles.formRow}>
@@ -927,8 +1052,10 @@ export default function Metas({ canWrite = false }) {
                 style={styles.select}
                 disabled={!canMutate}
               >
-                {tiposCriacao.map(t => (
-                  <option key={t.v} value={t.v}>{t.label}</option>
+                {tiposCriacao.map((t) => (
+                  <option key={t.v} value={t.v}>
+                    {t.label}
+                  </option>
                 ))}
               </select>
 
@@ -938,6 +1065,7 @@ export default function Metas({ canWrite = false }) {
                 placeholder="Valor alvo (ex: 5000 ou 5000,00)"
                 style={styles.input}
                 disabled={!canMutate}
+                inputMode="decimal"
               />
 
               {mTipo !== "limite_auto" ? (
@@ -947,6 +1075,7 @@ export default function Metas({ canWrite = false }) {
                   placeholder="Valor inicial (opcional)"
                   style={styles.input}
                   disabled={!canMutate}
+                  inputMode="decimal"
                 />
               ) : (
                 <select
@@ -956,8 +1085,10 @@ export default function Metas({ canWrite = false }) {
                   title="Categoria para limite automático"
                   disabled={!canMutate}
                 >
-                  {(categoriasLanc.length ? categoriasLanc : ["Outros"]).map(c => (
-                    <option key={c} value={c}>{c}</option>
+                  {(categoriasLanc.length ? categoriasLanc : ["Outros"]).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
                   ))}
                 </select>
               )}
@@ -986,15 +1117,20 @@ export default function Metas({ canWrite = false }) {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => openIconPicker({ mode: "new", current: mIcone })}
-                style={styles.secondaryBtn}
-                disabled={!canMutate}
-                title="Escolher ícone"
-              >
-                {mIcone || "🎯"} Escolher ícone
-              </button>
+              <div style={styles.iconCompact}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={styles.miniLabel}>Ícone</span>
+                  <span style={styles.iconPreview}>{selectedNewIcon()}</span>
+                  <button
+                    type="button"
+                    onClick={() => openIconPicker("new")}
+                    style={styles.smallBtn}
+                    disabled={!canMutate}
+                  >
+                    Escolher ícone ▸
+                  </button>
+                </div>
+              </div>
 
               <input
                 value={mCor}
@@ -1050,6 +1186,10 @@ export default function Metas({ canWrite = false }) {
               <button onClick={criarMeta} style={styles.primaryBtn} disabled={!canMutate}>
                 ➕ Criar meta
               </button>
+
+              <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
+                Dica: se for “limite por categoria”, o app calcula sozinho pelo gasto do mês.
+              </span>
             </div>
           </div>
         </CollapseSection>
@@ -1057,9 +1197,9 @@ export default function Metas({ canWrite = false }) {
         <CollapseSection
           id="ativas"
           title={`Metas ativas (${metasAtivas.length})`}
-          subtitle={metasAtivas.length ? "toque na meta para ver detalhes" : "crie sua primeira meta"}
+          subtitle={metasAtivas.length ? "acompanhe o progresso" : "crie sua primeira meta"}
           open={uiShowAtivas}
-          onToggle={() => setUiShowAtivas(v => !v)}
+          onToggle={() => setUiShowAtivas((v) => !v)}
         >
           <div style={{ display: "grid", gap: 10 }}>
             {metasAtivas.length === 0 ? (
@@ -1072,11 +1212,15 @@ export default function Metas({ canWrite = false }) {
             ) : null}
 
             {metasAtivas.map((m) => (
-              <MetaCardClean
+              <MetaCard
                 key={m.id}
                 meta={m}
-                onOpen={() => openDetails(m)}
-                onChooseIcon={() => openIconPicker({ mode: "meta", metaId: m.id, current: m.icone })}
+                canMutate={canMutate}
+                onAdd={() => abrirAdd(m)}
+                onEdit={() => abrirEditar(m)}
+                onArchive={() => arquivarMeta(m)}
+                onDelete={() => excluirMeta(m)}
+                onCheckin={() => fazerCheckin(m)}
               />
             ))}
           </div>
@@ -1087,7 +1231,7 @@ export default function Metas({ canWrite = false }) {
           title={`Arquivadas (${metasArquivadas.length})`}
           subtitle="histórico e concluídas"
           open={uiShowArquivadas}
-          onToggle={() => setUiShowArquivadas(v => !v)}
+          onToggle={() => setUiShowArquivadas((v) => !v)}
         >
           <div style={{ display: "grid", gap: 10 }}>
             {metasArquivadas.length === 0 ? (
@@ -1100,34 +1244,45 @@ export default function Metas({ canWrite = false }) {
             ) : null}
 
             {metasArquivadas.map((m) => (
-              <MetaCardClean
+              <MetaCard
                 key={m.id}
                 meta={m}
-                onOpen={() => openDetails(m)}
-                onChooseIcon={() => openIconPicker({ mode: "meta", metaId: m.id, current: m.icone })}
+                canMutate={canMutate}
                 archived
+                onReactivate={() => reativarMeta(m)}
+                onDelete={() => excluirMeta(m)}
               />
             ))}
           </div>
         </CollapseSection>
 
-        {iconsOpen ? (
+        {iconPickerOpen ? (
           <IconPickerModal
-            onClose={() => setIconsOpen(false)}
-            title="Escolher ícone"
-            icons={ICONES_SUGERIDOS}
-            selected={iconsSelected}
-            onPick={async (ic) => {
-              setIconsSelected(ic);
-              if (iconsTarget?.mode === "new") {
+            title={iconPickerMode === "edit" ? "Escolher ícone" : "Escolher ícone"}
+            onClose={() => setIconPickerOpen(false)}
+            canMutate={canMutate}
+            value={iconPickerMode === "edit" ? (eIconeCustom || eIcone || "🎯") : (mIconeCustom || mIcone || "🎯")}
+            onPick={(ic) => {
+              if (iconPickerMode === "edit") {
+                setEIcone(ic);
+                setEIconeCustom("");
+              } else {
                 setMIcone(ic);
-                setIconsOpen(false);
-                return;
+                setMIconeCustom("");
               }
-              if (iconsTarget?.mode === "meta" && iconsTarget?.metaId) {
-                await salvarIconeParaMeta(iconsTarget.metaId, ic);
-                setIconsOpen(false);
-              }
+              setIconPickerOpen(false);
+            }}
+            customValue={iconPickerMode === "edit" ? eIconeCustom : mIconeCustom}
+            onCustomChange={(val) => {
+              if (iconPickerMode === "edit") setEIconeCustom(val);
+              else setMIconeCustom(val);
+            }}
+            onApplyCustom={() => {
+              const v = String(iconPickerMode === "edit" ? eIconeCustom : mIconeCustom).trim();
+              if (!v) return;
+              if (iconPickerMode === "edit") setEIcone(v.slice(0, 4));
+              else setMIcone(v.slice(0, 4));
+              setIconPickerOpen(false);
             }}
           />
         ) : null}
@@ -1136,7 +1291,10 @@ export default function Metas({ canWrite = false }) {
           <Modal onClose={() => setAddOpen(false)} title="Adicionar progresso">
             <div style={{ display: "grid", gap: 10 }}>
               <div style={{ color: "var(--muted)", fontWeight: 900 }}>
-                Meta: <b style={{ color: "var(--text)" }}>{addMeta?.icone || "🎯"} {addMeta?.titulo}</b>
+                Meta:{" "}
+                <b style={{ color: "var(--text)" }}>
+                  {addMeta?.icone || "🎯"} {addMeta?.titulo}
+                </b>
               </div>
 
               <div style={styles.formRow2}>
@@ -1146,6 +1304,7 @@ export default function Metas({ canWrite = false }) {
                   placeholder="Valor (ex: 300 ou 300,00)"
                   style={styles.input}
                   disabled={!canMutate}
+                  inputMode="decimal"
                 />
 
                 <input
@@ -1174,35 +1333,162 @@ export default function Metas({ canWrite = false }) {
                 </button>
               </div>
 
-              {!canMutate ? (
-                <div style={styles.lockNote}>
-                  🔒 Assinatura necessária para registrar progresso.
-                </div>
-              ) : null}
+              {!canMutate ? <div style={styles.lockNote}>🔒 Assinatura necessária para registrar progresso.</div> : null}
             </div>
           </Modal>
         ) : null}
 
-        {detailsOpen ? (
-          <MetaDetailsModal
-            meta={detailsMeta}
-            onClose={() => setDetailsOpen(false)}
-            canMutate={canMutate}
-            onAdd={() => {
-              setDetailsOpen(false);
-              abrirAdd(detailsMeta);
-            }}
-            onCheckin={() => fazerCheckin(detailsMeta)}
-            onArchive={() => arquivarMeta(detailsMeta)}
-            onReactivate={() => reativarMeta(detailsMeta)}
-            onDelete={() => excluirMeta(detailsMeta)}
-          />
+        {editOpen ? (
+          <Modal
+            onClose={() => setEditOpen(false)}
+            title="Editar meta"
+            footer={
+              <div style={styles.modalFooterRow}>
+                <button onClick={() => setEditOpen(false)} style={styles.secondaryBtn}>
+                  Cancelar
+                </button>
+                <button onClick={salvarEditar} style={styles.primaryBtn} disabled={!canMutate}>
+                  ✅ Salvar alterações
+                </button>
+              </div>
+            }
+          >
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={styles.formRow}>
+                <input
+                  value={eTitulo}
+                  onChange={(e) => setETitulo(e.target.value)}
+                  placeholder="Nome da meta"
+                  style={{ ...styles.input, minWidth: 240 }}
+                  disabled={!canMutate}
+                />
+
+                <select value={eTipo} onChange={(e) => setETipo(e.target.value)} style={styles.select} disabled={!canMutate}>
+                  <option value="guardar">Guardar dinheiro</option>
+                  <option value="pagar">Pagar dívida</option>
+                  <option value="limitar">Limitar gasto (manual)</option>
+                </select>
+
+                <input
+                  value={eAlvo}
+                  onChange={(e) => setEAlvo(e.target.value)}
+                  placeholder="Valor alvo"
+                  style={styles.input}
+                  disabled={!canMutate}
+                  inputMode="decimal"
+                />
+
+                <div style={styles.dateGroup}>
+                  <div style={styles.dateCol}>
+                    <div style={styles.miniLabel}>Início</div>
+                    <input
+                      type="date"
+                      value={eInicio}
+                      onChange={(e) => setEInicio(e.target.value)}
+                      style={{ ...styles.input, minWidth: 190 }}
+                      disabled={!canMutate}
+                    />
+                  </div>
+
+                  <div style={styles.dateCol}>
+                    <div style={styles.miniLabel}>Fim (opcional)</div>
+                    <input
+                      type="date"
+                      value={eFim || ""}
+                      onChange={(e) => setEFim(e.target.value)}
+                      style={{ ...styles.input, minWidth: 190 }}
+                      disabled={!canMutate}
+                    />
+                  </div>
+                </div>
+
+                <label style={styles.checkLabel} title="Limite automático por categoria (mensal)">
+                  <input
+                    type="checkbox"
+                    checked={eModoLimiteAuto}
+                    onChange={(e) => setEModoLimiteAuto(e.target.checked)}
+                    disabled={!canMutate}
+                  />
+                  Limite por categoria (auto)
+                </label>
+
+                {eModoLimiteAuto ? (
+                  <select value={eCategoriaLimite} onChange={(e) => setECategoriaLimite(e.target.value)} style={styles.select} disabled={!canMutate}>
+                    {(categoriasLanc.length ? categoriasLanc : ["Outros"]).map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+
+                <div style={styles.iconCompact}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <span style={styles.miniLabel}>Ícone</span>
+                    <span style={styles.iconPreview}>{selectedEditIcon()}</span>
+                    <button type="button" onClick={() => openIconPicker("edit")} style={styles.smallBtn} disabled={!canMutate}>
+                      Escolher ícone ▸
+                    </button>
+                  </div>
+                </div>
+
+                <input
+                  value={eCor}
+                  onChange={(e) => setECor(e.target.value)}
+                  style={{ ...styles.input, minWidth: 160 }}
+                  placeholder="#2563EB"
+                  title="Cor (hex)"
+                  disabled={!canMutate}
+                />
+
+                <label style={styles.checkLabel}>
+                  <input
+                    type="checkbox"
+                    checked={eDesafioAtivo}
+                    onChange={(e) => setEDesafioAtivo(e.target.checked)}
+                    disabled={!canMutate}
+                  />
+                  Modo desafio
+                </label>
+
+                {eDesafioAtivo ? (
+                  <select value={eDesafioFreq} onChange={(e) => setEDesafioFreq(e.target.value)} style={styles.select} disabled={!canMutate}>
+                    <option value="diario">Diário</option>
+                    <option value="semanal">Semanal</option>
+                  </select>
+                ) : null}
+
+                <label style={styles.checkLabel}>
+                  <input
+                    type="checkbox"
+                    checked={eLembreteAtivo}
+                    onChange={(e) => setELembreteAtivo(e.target.checked)}
+                    disabled={!canMutate}
+                  />
+                  Lembrete
+                </label>
+
+                {eLembreteAtivo ? (
+                  <input
+                    type="time"
+                    value={eLembreteHora}
+                    onChange={(e) => setELembreteHora(e.target.value)}
+                    style={{ ...styles.input, minWidth: 140 }}
+                    disabled={!canMutate}
+                  />
+                ) : null}
+              </div>
+
+              {!canMutate ? <div style={styles.lockNote}>🔒 Assinatura necessária para editar metas.</div> : null}
+            </div>
+          </Modal>
         ) : null}
       </div>
     </div>
   );
-}
 
+  return ui;
+}
 
 function CollapseSection({ id, title, subtitle, open, onToggle, children }) {
   return (
@@ -1212,83 +1498,152 @@ function CollapseSection({ id, title, subtitle, open, onToggle, children }) {
           <span style={{ fontWeight: 1000 }}>{title}</span>
           <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>{subtitle}</span>
         </div>
-        <span style={{ color: "var(--muted)", fontWeight: 900 }}>
-          {open ? "▾" : "▸"}
-        </span>
+        <span style={{ color: "var(--muted)", fontWeight: 900 }}>{open ? "▾" : "▸"}</span>
       </button>
       {open ? <div style={{ marginTop: 10 }}>{children}</div> : null}
     </div>
   );
 }
 
-function MetaCardClean({ meta, onOpen, onChooseIcon, archived = false }) {
-  const pct = clampPct(meta.pct);
+function MetaCard({
+  meta,
+  canMutate,
+  archived = false,
+  onAdd,
+  onEdit,
+  onArchive,
+  onReactivate,
+  onDelete,
+  onCheckin,
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const badge =
-    meta.done
-      ? { txt: "Concluída", bg: "rgba(34,197,94,.15)", bd: "rgba(34,197,94,.30)" }
-      : meta.isLate
-        ? { txt: "Atrasada", bg: "rgba(239,68,68,.12)", bd: "rgba(239,68,68,.28)" }
-        : meta.modoLimiteAuto
-          ? { txt: `Limite: ${meta.limite_categoria || "Categoria"}`, bg: "rgba(59,130,246,.12)", bd: "rgba(59,130,246,.28)" }
-          : { txt: `${pct.toFixed(0)}%`, bg: "rgba(59,130,246,.10)", bd: "rgba(59,130,246,.25)" };
+  const pct = clampPct(meta.pct);
+  const done = meta.modoLimiteAuto
+    ? meta.valor_alvo > 0
+      ? meta.atual <= meta.valor_alvo
+      : true
+    : meta.done;
+
+  const badge = done
+    ? { txt: "Concluída", bg: "rgba(34,197,94,.15)", bd: "rgba(34,197,94,.30)" }
+    : meta.isLate
+    ? { txt: "Atrasada", bg: "rgba(239,68,68,.12)", bd: "rgba(239,68,68,.28)" }
+    : meta.modoLimiteAuto
+    ? { txt: `Limite: ${meta.limite_categoria || "Categoria"}`, bg: "rgba(59,130,246,.12)", bd: "rgba(59,130,246,.28)" }
+    : { txt: `${pct.toFixed(0)}%`, bg: "rgba(59,130,246,.10)", bd: "rgba(59,130,246,.25)" };
+
+  function closeMenu() {
+    setMenuOpen(false);
+  }
 
   return (
-    <button
-      onClick={onOpen}
-      style={{ ...styles.metaCard, cursor: "pointer", textAlign: "left" }}
-      title="Abrir detalhes"
-    >
+    <div style={styles.metaCard}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-          <div style={{
-            ...styles.metaIcon,
-            borderColor: meta.cor || "var(--border)",
-            background: "var(--controlBg)"
-          }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", minWidth: 0 }}>
+          <div
+            style={{
+              ...styles.metaIcon,
+              borderColor: meta.cor || "var(--border)",
+              background: "var(--controlBg)",
+            }}
+          >
             <span style={{ fontSize: 18 }}>{meta.icone || "🎯"}</span>
           </div>
 
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ fontWeight: 1000, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 520 }}>
+              <div
+                style={{
+                  fontWeight: 1000,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: 520,
+                }}
+              >
                 {meta.titulo}
               </div>
 
-              <span style={{
-                ...styles.badge,
-                background: badge.bg,
-                borderColor: badge.bd,
-                color: "var(--text)"
-              }}>
+              <span
+                style={{
+                  ...styles.badge,
+                  background: badge.bg,
+                  borderColor: badge.bd,
+                  color: "var(--text)",
+                }}
+              >
                 {badge.txt}
               </span>
 
-              {archived ? (
-                <span style={{
-                  ...styles.badge,
-                  background: "rgba(148,163,184,.15)",
-                  borderColor: "rgba(148,163,184,.30)",
-                  color: "var(--text)"
-                }}>
-                  Arquivada
+              {meta.desafio_ativo ? (
+                <span
+                  style={{
+                    ...styles.badge,
+                    background: "rgba(245,158,11,.12)",
+                    borderColor: "rgba(245,158,11,.25)",
+                    color: "var(--text)",
+                  }}
+                >
+                  🔥 streak: {meta.streak || 0}
                 </span>
               ) : null}
             </div>
 
             <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 900, fontSize: 13 }}>
-              {money(meta.atual)} / {money(meta.valor_alvo)} • {pct.toFixed(0)}%
               {meta.modoLimiteAuto ? (
-                <> • {meta.limite_categoria || "Categoria"}</>
-              ) : null}
+                <>
+                  Gasto do mês: <b style={{ color: "var(--text)" }}>{money(meta.atual)}</b> de{" "}
+                  <b style={{ color: "var(--text)" }}>{money(meta.valor_alvo)}</b> • {pct.toFixed(0)}%
+                </>
+              ) : (
+                <>
+                  <b style={{ color: "var(--text)" }}>{money(meta.atual)}</b> de{" "}
+                  <b style={{ color: "var(--text)" }}>{money(meta.valor_alvo)}</b> • {pct.toFixed(0)}% • falta{" "}
+                  <b style={{ color: "var(--text)" }}>{money(meta.falta)}</b>
+                </>
+              )}
             </div>
 
             <div style={{ ...styles.progressWrap, marginTop: 10 }}>
-              <div style={{
-                ...styles.progressBar,
-                width: `${Math.min(100, Math.max(0, pct))}%`,
-                background: meta.cor || "var(--accent)"
-              }} />
+              <div
+                style={{
+                  ...styles.progressBar,
+                  width: `${Math.min(100, Math.max(0, pct))}%`,
+                  background: meta.cor || "var(--accent)",
+                }}
+              />
+            </div>
+
+            <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={styles.micro}>
+                Início: <b style={{ color: "var(--text)" }}>{formatShortDate(meta.data_inicio)}</b>
+              </span>
+
+              {meta.data_fim ? (
+                <span style={styles.micro}>
+                  Fim: <b style={{ color: "var(--text)" }}>{formatShortDate(meta.data_fim)}</b>
+                </span>
+              ) : (
+                <span style={styles.micro}>
+                  Fim: <b style={{ color: "var(--text)" }}>—</b>
+                </span>
+              )}
+
+              {meta.data_fim && meta.diasRest !== null ? (
+                <span style={styles.micro}>
+                  Restam:{" "}
+                  <b style={{ color: "var(--text)" }}>
+                    {meta.diasRest >= 0 ? `${meta.diasRest} dias` : `${Math.abs(meta.diasRest)} dias (passou)`}
+                  </b>
+                </span>
+              ) : null}
+
+              {!meta.modoLimiteAuto && meta.data_fim && meta.porMes ? (
+                <span style={styles.micro}>
+                  Ritmo: <b style={{ color: "var(--text)" }}>{money(meta.porMes)}</b>/mês
+                </span>
+              ) : null}
             </div>
 
             <div style={{ marginTop: 10, color: "var(--text)", fontWeight: 900, opacity: 0.9 }}>
@@ -1297,157 +1652,177 @@ function MetaCardClean({ meta, onOpen, onChooseIcon, archived = false }) {
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+        <div style={{ position: "relative", flex: "0 0 auto" }}>
           <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onChooseIcon?.();
-            }}
-            style={styles.smallBtn}
-            title="Escolher ícone"
+            style={styles.menuBtn}
+            onClick={() => setMenuOpen((v) => !v)}
+            disabled={!canMutate}
+            title="Ações"
           >
-            {meta.icone || "🎯"} Escolher ícone
+            ⋮
           </button>
 
-          <span style={{ color: "var(--muted)", fontWeight: 900, fontSize: 12 }}>
-            Toque para detalhes ▸
-          </span>
+          {menuOpen ? (
+            <div
+              style={styles.menuOverlay}
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) closeMenu();
+              }}
+            >
+              <div style={styles.menuCard} onMouseDown={(e) => e.stopPropagation()}>
+                {!archived ? (
+                  <>
+                    <button
+                      style={styles.menuItem}
+                      onClick={() => {
+                        closeMenu();
+                        if (!meta.modoLimiteAuto) onAdd?.();
+                      }}
+                      disabled={!canMutate || meta.modoLimiteAuto}
+                      title={meta.modoLimiteAuto ? "Meta automática: progresso é calculado sozinho" : "Adicionar progresso"}
+                    >
+                      ➕ Progresso
+                    </button>
+
+                    {meta.desafio_ativo ? (
+                      <button
+                        style={styles.menuItem}
+                        onClick={() => {
+                          closeMenu();
+                          onCheckin?.();
+                        }}
+                        disabled={!canMutate}
+                      >
+                        🔥 Check-in
+                      </button>
+                    ) : null}
+
+                    <button
+                      style={styles.menuItem}
+                      onClick={() => {
+                        closeMenu();
+                        onEdit?.();
+                      }}
+                      disabled={!canMutate}
+                    >
+                      ✏️ Editar
+                    </button>
+
+                    <button
+                      style={styles.menuItem}
+                      onClick={() => {
+                        closeMenu();
+                        onArchive?.();
+                      }}
+                      disabled={!canMutate}
+                    >
+                      🗂️ Arquivar
+                    </button>
+
+                    <button
+                      style={{ ...styles.menuItem, ...styles.menuDanger }}
+                      onClick={() => {
+                        closeMenu();
+                        onDelete?.();
+                      }}
+                      disabled={!canMutate}
+                    >
+                      🗑️ Excluir
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      style={styles.menuItem}
+                      onClick={() => {
+                        closeMenu();
+                        onReactivate?.();
+                      }}
+                      disabled={!canMutate}
+                    >
+                      ♻️ Reativar
+                    </button>
+
+                    <button
+                      style={{ ...styles.menuItem, ...styles.menuDanger }}
+                      onClick={() => {
+                        closeMenu();
+                        onDelete?.();
+                      }}
+                      disabled={!canMutate}
+                    >
+                      🗑️ Excluir
+                    </button>
+                  </>
+                )}
+
+                <button style={styles.menuItem} onClick={closeMenu}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
-function MetaDetailsModal({
-  meta,
+function IconPickerModal({
+  title,
   onClose,
   canMutate,
-  onAdd,
-  onCheckin,
-  onArchive,
-  onReactivate,
-  onDelete,
+  value,
+  onPick,
+  customValue,
+  onCustomChange,
+  onApplyCustom,
 }) {
-  if (!meta) return null;
-
-  const pct = clampPct(meta.pct);
-
   return (
     <Modal
-      title="Detalhes da meta"
       onClose={onClose}
+      title={title}
       footer={
         <div style={styles.modalFooterRow}>
-          {!meta.ativo ? (
-            <button onClick={onReactivate} style={styles.secondaryBtn} disabled={!canMutate}>
-              ♻️ Reativar
-            </button>
-          ) : (
-            <button onClick={onArchive} style={styles.secondaryBtn} disabled={!canMutate}>
-              🗂️ Arquivar
-            </button>
-          )}
-
-          <button onClick={onDelete} style={styles.dangerBtn} disabled={!canMutate}>
-            🗑️ Excluir
+          <button onClick={onClose} style={styles.secondaryBtn}>
+            Cancelar
+          </button>
+          <button onClick={onApplyCustom} style={styles.primaryBtn} disabled={!canMutate || !String(customValue || "").trim()}>
+            Usar personalizado
           </button>
         </div>
       }
     >
       <div style={{ display: "grid", gap: 10 }}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{
-            ...styles.metaIcon,
-            borderColor: meta.cor || "var(--border)",
-            background: "var(--controlBg)"
-          }}>
-            <span style={{ fontSize: 18 }}>{meta.icone || "🎯"}</span>
-          </div>
-
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 1100, fontSize: 16 }}>
-              {meta.titulo}
-            </div>
-            <div style={{ marginTop: 4, color: "var(--muted)", fontWeight: 900 }}>
-              {money(meta.atual)} / {money(meta.valor_alvo)} • {pct.toFixed(0)}%
-              {meta.data_inicio ? <> • início {formatShortDate(meta.data_inicio)}</> : null}
-              {meta.data_fim ? <> • fim {formatShortDate(meta.data_fim)}</> : null}
-            </div>
-          </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ color: "var(--muted)", fontWeight: 900 }}>Selecionado:</span>
+          <span style={styles.iconPreview}>{String(value || "🎯").slice(0, 4)}</span>
         </div>
 
-        <div style={styles.progressWrap}>
-          <div style={{
-            ...styles.progressBar,
-            width: `${Math.min(100, Math.max(0, pct))}%`,
-            background: meta.cor || "var(--accent)"
-          }} />
-        </div>
-
-        <div style={{ color: "var(--text)", fontWeight: 900, opacity: 0.9 }}>
-          {meta.motivational}
-        </div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            onClick={onAdd}
-            style={styles.primaryBtn}
-            disabled={!canMutate || meta.modoLimiteAuto || !meta.ativo}
-            title={meta.modoLimiteAuto ? "Meta automática: progresso é calculado sozinho" : "Adicionar progresso"}
-          >
-            ➕ Adicionar progresso
-          </button>
-
-          {meta.desafio_ativo ? (
-            <button
-              onClick={onCheckin}
-              style={styles.secondaryBtn}
-              disabled={!canMutate || !meta.ativo}
-              title="Registrar check-in do desafio"
-            >
-              🔥 Check-in
-            </button>
-          ) : null}
-        </div>
-
-        {!canMutate ? (
-          <div style={styles.lockNote}>
-            🔒 Assinatura necessária para ações (progresso / check-in / arquivar / excluir).
-          </div>
-        ) : null}
-      </div>
-    </Modal>
-  );
-}
-
-function IconPickerModal({ title, onClose, icons, selected, onPick }) {
-  return (
-    <Modal title={title} onClose={onClose}>
-      <div style={{ display: "grid", gap: 10 }}>
-        <div style={{ color: "var(--muted)", fontWeight: 900 }}>
-          Selecionado: <b style={{ color: "var(--text)" }}>{(selected || "🎯").slice(0, 4)}</b>
-        </div>
+        <input
+          value={customValue}
+          onChange={(e) => onCustomChange?.(e.target.value)}
+          placeholder="Ícone personalizado (opcional) — ex: ⭐"
+          style={styles.input}
+          disabled={!canMutate}
+        />
 
         <div style={styles.iconGrid}>
-          {(icons || []).map((ic) => {
-            const active = (selected || "🎯") === ic;
-            return (
-              <button
-                key={ic}
-                onClick={() => onPick?.(ic)}
-                style={{
-                  ...styles.iconPick,
-                  borderColor: active ? "var(--tabActiveBorder)" : "var(--border)",
-                  background: active ? "var(--tabActiveBg)" : "var(--controlBg)",
-                }}
-                title={`Usar ${ic}`}
-              >
-                {ic}
-              </button>
-            );
-          })}
+          {ICONES_SUGERIDOS.map((ic) => (
+            <button
+              key={ic}
+              type="button"
+              onClick={() => onPick?.(ic)}
+              style={{
+                ...styles.iconPick,
+                borderColor: String(value || "").includes(ic) ? "var(--tabActiveBorder)" : "var(--border)",
+                background: String(value || "").includes(ic) ? "var(--tabActiveBg)" : "var(--controlBg)",
+              }}
+              disabled={!canMutate}
+            >
+              {ic}
+            </button>
+          ))}
         </div>
       </div>
     </Modal>
@@ -1465,26 +1840,28 @@ function Modal({ title, onClose, children, footer = null }) {
       <div style={styles.modalCard} onMouseDown={(e) => e.stopPropagation()}>
         <div style={styles.modalHeaderSticky}>
           <div style={{ fontWeight: 1000 }}>{title}</div>
-          <button onClick={onClose} style={styles.smallBtn}>✖</button>
+          <button onClick={onClose} style={styles.smallBtn}>
+            ✖
+          </button>
         </div>
 
-        <div style={styles.modalBodyScroll}>
-          {children}
-        </div>
+        <div style={styles.modalBodyScroll}>{children}</div>
 
-        {footer ? (
-          <div style={styles.modalFooterSticky}>
-            {footer}
-          </div>
-        ) : null}
+        {footer ? <div style={styles.modalFooterSticky}>{footer}</div> : null}
       </div>
     </div>
   );
 }
 
 const styles = {
-  page: { padding: 12, color: "var(--text)" },
-  frame: { maxWidth: 1180, margin: "0 auto" },
+  page: {
+    padding: 12,
+    color: "var(--text)",
+  },
+  frame: {
+    maxWidth: 1180,
+    margin: "0 auto",
+  },
   header: {
     display: "flex",
     justifyContent: "space-between",
@@ -1522,10 +1899,26 @@ const styles = {
     borderRadius: 16,
     boxShadow: "0 10px 24px rgba(0,0,0,.06)",
   },
-  cardLabel: { color: "var(--muted)", fontWeight: 1000, fontSize: 12 },
-  cardValue: { marginTop: 6, fontWeight: 1100, fontSize: 26, letterSpacing: -0.4 },
-  cardHint: { marginTop: 6, color: "var(--muted)", fontWeight: 900, fontSize: 12 },
-  section: { marginTop: 12 },
+  cardLabel: {
+    color: "var(--muted)",
+    fontWeight: 1000,
+    fontSize: 12,
+  },
+  cardValue: {
+    marginTop: 6,
+    fontWeight: 1100,
+    fontSize: 26,
+    letterSpacing: -0.4,
+  },
+  cardHint: {
+    marginTop: 6,
+    color: "var(--muted)",
+    fontWeight: 900,
+    fontSize: 12,
+  },
+  section: {
+    marginTop: 12,
+  },
   sectionHead: {
     width: "100%",
     textAlign: "left",
@@ -1546,8 +1939,18 @@ const styles = {
     borderRadius: 16,
     padding: 14,
   },
-  formRow: { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" },
-  formRow2: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
+  formRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    alignItems: "center",
+  },
+  formRow2: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
   input: {
     border: "1px solid var(--border)",
     background: "var(--controlBg)",
@@ -1584,15 +1987,6 @@ const styles = {
     cursor: "pointer",
     fontWeight: 1000,
   },
-  dangerBtn: {
-    border: "1px solid rgba(239,68,68,.35)",
-    background: "rgba(239,68,68,.10)",
-    color: "var(--text)",
-    padding: "10px 12px",
-    borderRadius: 12,
-    cursor: "pointer",
-    fontWeight: 1000,
-  },
   smallBtn: {
     border: "1px solid var(--border)",
     background: "var(--controlBg)",
@@ -1610,6 +2004,11 @@ const styles = {
     color: "var(--muted)",
     fontWeight: 1000,
     userSelect: "none",
+  },
+  micro: {
+    color: "var(--muted)",
+    fontWeight: 900,
+    fontSize: 12,
   },
   lockNote: {
     border: "1px solid rgba(245,158,11,.30)",
@@ -1650,7 +2049,10 @@ const styles = {
     background: "var(--controlBg)",
     overflow: "hidden",
   },
-  progressBar: { height: "100%", borderRadius: 999 },
+  progressBar: {
+    height: "100%",
+    borderRadius: 999,
+  },
   dateGroup: {
     display: "flex",
     gap: 10,
@@ -1661,26 +2063,102 @@ const styles = {
     borderRadius: 14,
     padding: 10,
   },
-  dateCol: { display: "grid", gap: 6 },
-  miniLabel: { fontSize: 12, color: "var(--muted)", fontWeight: 1000 },
+  dateCol: {
+    display: "grid",
+    gap: 6,
+  },
+  miniLabel: {
+    fontSize: 12,
+    color: "var(--muted)",
+    fontWeight: 1000,
+  },
+  iconCompact: {
+    border: "1px solid var(--border)",
+    background: "var(--card2)",
+    borderRadius: 14,
+    padding: 10,
+    minWidth: 240,
+  },
+  iconPreview: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 1000,
+    fontSize: 18,
+  },
+  iconGrid: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
   iconPick: {
     border: "1px solid var(--border)",
     background: "var(--controlBg)",
     color: "var(--text)",
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 14,
     cursor: "pointer",
     fontWeight: 1000,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 18,
   },
-  iconGrid: {
+  menuBtn: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    cursor: "pointer",
+    fontWeight: 1100,
+    fontSize: 18,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,.25)",
+    zIndex: 80,
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    padding:
+      "max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))",
+  },
+  menuCard: {
+    width: "min(520px, 100%)",
+    borderRadius: 18,
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    color: "var(--text)",
+    boxShadow: "0 18px 40px rgba(0,0,0,.28)",
+    padding: 10,
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(44px, 1fr))",
-    gap: 10,
+    gap: 8,
+  },
+  menuItem: {
+    border: "1px solid var(--border)",
+    background: "var(--controlBg)",
+    color: "var(--text)",
+    padding: "12px 12px",
+    borderRadius: 14,
+    cursor: "pointer",
+    fontWeight: 1000,
+    textAlign: "left",
+  },
+  menuDanger: {
+    border: "1px solid rgba(239,68,68,.35)",
+    background: "rgba(239,68,68,.10)",
   },
   modalOverlay: {
     position: "fixed",
@@ -1691,7 +2169,7 @@ const styles = {
     justifyContent: "center",
     padding:
       "max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))",
-    zIndex: 70,
+    zIndex: 90,
   },
   modalCard: {
     width: "min(860px, 100%)",
