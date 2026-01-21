@@ -233,6 +233,7 @@ export default function Dashboard({ canWrite } = {}) {
   }, [ano, mes]);
 
   const defaultCollapsedMobile = useMemo(() => isMobileNow(), []);
+
   const [uiPersonalizarOpen, setUiPersonalizarOpen] = useState(() => safeBoolLS("gfd_ui_personalizar", false));
   const [uiShowContas, setUiShowContas] = useState(() => safeBoolLS("gfd_ui_contas", !defaultCollapsedMobile));
   const [uiShowFixas, setUiShowFixas] = useState(() => safeBoolLS("gfd_ui_fixas", !defaultCollapsedMobile));
@@ -260,188 +261,71 @@ export default function Dashboard({ canWrite } = {}) {
   }
 
   const [menuOpenId, setMenuOpenId] = useState(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 220 });
-  const menuBoxRef = useRef(null);
   const menuBtnRefs = useRef(new Map());
-
   function setMenuBtnRef(id, node) {
     if (!id) return;
     if (node) menuBtnRefs.current.set(id, node);
     else menuBtnRefs.current.delete(id);
   }
-
-  function openMenuAtButton(id) {
-    const btn = menuBtnRefs.current.get(id);
-    if (!btn) return;
-
-    const r = btn.getBoundingClientRect();
-    const w = 240;
-    const margin = 10;
-
-    let top = r.bottom + 8;
-    let left = r.right - w;
-
-    const vh = window.innerHeight;
-    const vw = window.innerWidth;
-
-    if (left < margin) left = margin;
-    if (left + w > vw - margin) left = vw - w - margin;
-
-    const menuH = 260;
-    if (top + menuH > vh - margin) {
-      top = Math.max(margin, r.top - 8 - menuH);
-    }
-
-    setMenuPos({ top, left, width: w });
-  }
-
   function toggleMenu(id) {
     if (!canWrite) return;
-    setMenuOpenId((prev) => {
-      const next = prev === id ? null : id;
-      if (next) openMenuAtButton(id);
-      return next;
-    });
+    setMenuOpenId((prev) => (prev === id ? null : id));
   }
 
   const [contaMenuOpenId, setContaMenuOpenId] = useState(null);
-  const [contaMenuPos, setContaMenuPos] = useState({ top: 0, left: 0, width: 230 });
-  const contaMenuRef = useRef(null);
   const contaBtnRefs = useRef(new Map());
-
   function setContaBtnRef(id, node) {
     const map = contaBtnRefs.current;
     if (!id) return;
     if (!node) map.delete(id);
     else map.set(id, node);
   }
-
-  function openContaMenuAtButton(id) {
-    const btn = contaBtnRefs.current.get(id);
-    if (!btn) return;
-
-    const r = btn.getBoundingClientRect();
-    const w = 240;
-    const margin = 10;
-
-    let top = r.bottom + 8;
-    let left = r.right - w;
-
-    const vh = window.innerHeight;
-    const vw = window.innerWidth;
-
-    if (left < margin) left = margin;
-    if (left + w > vw - margin) left = vw - w - margin;
-
-    const menuH = 200;
-    if (top + menuH > vh - margin) {
-      top = Math.max(margin, r.top - 8 - menuH);
-    }
-
-    setContaMenuPos({ top, left, width: w });
-  }
-
   function toggleContaMenu(id) {
     if (!canWrite) return;
-    setContaMenuOpenId((prev) => {
-      const next = prev === id ? null : id;
-      if (next) openContaMenuAtButton(id);
-      return next;
-    });
+    setContaMenuOpenId((prev) => (prev === id ? null : id));
   }
 
   const [fixaMenuOpenId, setFixaMenuOpenId] = useState(null);
-  const [fixaMenuPos, setFixaMenuPos] = useState({ top: 0, left: 0, width: 230 });
-  const fixaMenuRef = useRef(null);
   const fixaBtnRefs = useRef(new Map());
-
   function setFixaBtnRef(id, node) {
     const map = fixaBtnRefs.current;
     if (!id) return;
     if (!node) map.delete(id);
     else map.set(id, node);
   }
-
-  function openFixaMenuAtButton(id) {
-    const btn = fixaBtnRefs.current.get(id);
-    if (!btn) return;
-
-    const r = btn.getBoundingClientRect();
-    const w = 240;
-    const margin = 10;
-
-    let top = r.bottom + 8;
-    let left = r.right - w;
-
-    const vh = window.innerHeight;
-    const vw = window.innerWidth;
-
-    if (left < margin) left = margin;
-    if (left + w > vw - margin) left = vw - w - margin;
-
-    const menuH = 200;
-    if (top + menuH > vh - margin) {
-      top = Math.max(margin, r.top - 8 - menuH);
-    }
-
-    setFixaMenuPos({ top, left, width: w });
-  }
-
   function toggleFixaMenu(id) {
     if (!canWrite) return;
-    setFixaMenuOpenId((prev) => {
-      const next = prev === id ? null : id;
-      if (next) openFixaMenuAtButton(id);
-      return next;
-    });
+    setFixaMenuOpenId((prev) => (prev === id ? null : id));
   }
 
   useEffect(() => {
     function onDown(e) {
       if (menuOpenId) {
-        const box = menuBoxRef.current;
         const btn = menuBtnRefs.current.get(menuOpenId);
-        const inside = box && box.contains(e.target);
         const onBtn = btn && btn.contains(e.target);
-        if (!inside && !onBtn) setMenuOpenId(null);
+        const insideMenu = !!e.target?.closest?.("[data-gfd-portalmenu='1']");
+        if (!insideMenu && !onBtn) setMenuOpenId(null);
       }
-
       if (contaMenuOpenId) {
-        const box = contaMenuRef.current;
         const btn = contaBtnRefs.current.get(contaMenuOpenId);
-        const inside = box && box.contains(e.target);
         const onBtn = btn && btn.contains(e.target);
-        if (!inside && !onBtn) setContaMenuOpenId(null);
+        const insideMenu = !!e.target?.closest?.("[data-gfd-portalmenu='1']");
+        if (!insideMenu && !onBtn) setContaMenuOpenId(null);
       }
-
       if (fixaMenuOpenId) {
-        const box = fixaMenuRef.current;
         const btn = fixaBtnRefs.current.get(fixaMenuOpenId);
-        const inside = box && box.contains(e.target);
         const onBtn = btn && btn.contains(e.target);
-        if (!inside && !onBtn) setFixaMenuOpenId(null);
+        const insideMenu = !!e.target?.closest?.("[data-gfd-portalmenu='1']");
+        if (!insideMenu && !onBtn) setFixaMenuOpenId(null);
       }
     }
-
-    function onScrollOrResize() {
-      if (menuOpenId) openMenuAtButton(menuOpenId);
-      if (contaMenuOpenId) openContaMenuAtButton(contaMenuOpenId);
-      if (fixaMenuOpenId) openFixaMenuAtButton(fixaMenuOpenId);
-    }
-
     window.addEventListener("mousedown", onDown, true);
-    window.addEventListener("scroll", onScrollOrResize, true);
-    window.addEventListener("resize", onScrollOrResize);
-
-    return () => {
-      window.removeEventListener("mousedown", onDown, true);
-      window.removeEventListener("scroll", onScrollOrResize, true);
-      window.removeEventListener("resize", onScrollOrResize);
-    };
+    return () => window.removeEventListener("mousedown", onDown, true);
   }, [menuOpenId, contaMenuOpenId, fixaMenuOpenId]);
 
   const [contas, setContas] = useState([]);
   const [loadingContas, setLoadingContas] = useState(false);
+
   const [contaNome, setContaNome] = useState("");
   const [contaSaldoInicial, setContaSaldoInicial] = useState("");
   const [contaTipo, setContaTipo] = useState("Conta");
@@ -577,6 +461,23 @@ export default function Dashboard({ canWrite } = {}) {
     return m;
   }, [contas]);
 
+  // ✅ CORREÇÃO DO BUG DA TELA BRANCA:
+  // esses states eram usados no JSX mas não existiam (ReferenceError)
+  const [uiOpenContas, setUiOpenContas] = useState(() => safeBoolLS("gfd_open_contas", !defaultCollapsedMobile));
+  const [uiOpenFixas, setUiOpenFixas] = useState(() => safeBoolLS("gfd_open_fixas", !defaultCollapsedMobile));
+  const [uiOpenNovo, setUiOpenNovo] = useState(() => safeBoolLS("gfd_open_novo", !defaultCollapsedMobile));
+  const [uiOpenLista, setUiOpenLista] = useState(() => safeBoolLS("gfd_open_lista", true));
+  const [uiOpenListaFixas, setUiOpenListaFixas] = useState(() => safeBoolLS("gfd_open_lista_fixas", true));
+  const [uiOpenListaParcelas, setUiOpenListaParcelas] = useState(() => safeBoolLS("gfd_open_lista_parcelas", true));
+  const [uiOpenListaAvulsos, setUiOpenListaAvulsos] = useState(() => safeBoolLS("gfd_open_lista_avulsos", true));
+
+  useEffect(() => setBoolLS("gfd_open_contas", uiOpenContas), [uiOpenContas]);
+  useEffect(() => setBoolLS("gfd_open_fixas", uiOpenFixas), [uiOpenFixas]);
+  useEffect(() => setBoolLS("gfd_open_novo", uiOpenNovo), [uiOpenNovo]);
+  useEffect(() => setBoolLS("gfd_open_lista", uiOpenLista), [uiOpenLista]);
+  useEffect(() => setBoolLS("gfd_open_lista_fixas", uiOpenListaFixas), [uiOpenListaFixas]);
+  useEffect(() => setBoolLS("gfd_open_lista_parcelas", uiOpenListaParcelas), [uiOpenListaParcelas]);
+  useEffect(() => setBoolLS("gfd_open_lista_avulsos", uiOpenListaAvulsos), [uiOpenListaAvulsos]);
   const [fixas, setFixas] = useState([]);
   const [fixasOk, setFixasOk] = useState(true);
   const [loadingFixas, setLoadingFixas] = useState(false);
@@ -679,6 +580,7 @@ export default function Dashboard({ canWrite } = {}) {
     setEditFixaOpen(false);
     setEditFixaId(null);
   }
+
   async function salvarEdicaoFixa() {
     if (!guardWrite()) return;
     if (!editFixaId) return;
@@ -839,6 +741,7 @@ export default function Dashboard({ canWrite } = {}) {
       if (!contaId && (contasList || []).length > 0) setContaId(contasList[0].id);
       if (!fixaContaId && (contasList || []).length > 0) setFixaContaId("");
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroYM, filtroContaId]);
 
   async function salvar() {
@@ -1535,6 +1438,19 @@ export default function Dashboard({ canWrite } = {}) {
   const categoriasFixaNovo = fixaTipo === "despesa" ? categoriasDespesa : categoriasReceita;
   const categoriasFixaEdit = editFixaTipo === "despesa" ? categoriasDespesa : categoriasReceita;
 
+  // aliases para manter seu JSX sem estourar ReferenceError
+  const contaSaldo = contaSaldoInicial;
+  const setContaSaldo = setContaSaldoInicial;
+  const salvarConta = criarConta;
+
+  const salvarFixa = criarFixa;
+
+  const setContaMenuBtnRef = setContaBtnRef;
+  const contaMenuBtnRefs = contaBtnRefs.current;
+
+  const setFixaMenuBtnRef = setFixaBtnRef;
+  const fixaMenuBtnRefs = fixaBtnRefs.current;
+
   return (
     <div style={styles.page}>
       <style>{globalCss()}</style>
@@ -2057,12 +1973,8 @@ export default function Dashboard({ canWrite } = {}) {
           </CollapseSection>
         ) : null}
 
-        {/* MENUS (Portals) */}
         {menuOpenId ? (
-          <PortalMenu
-            anchorEl={menuBtnRefs.get(menuOpenId)}
-            onClose={() => setMenuOpenId(null)}
-          >
+          <PortalMenu anchorEl={menuBtnRefs.current.get(menuOpenId)} onClose={() => setMenuOpenId(null)}>
             {(() => {
               const l = (lancamentos || []).find((x) => x.id === menuOpenId);
               if (!l) return null;
@@ -2086,18 +1998,12 @@ export default function Dashboard({ canWrite } = {}) {
                   </button>
 
                   {isParc ? (
-                    <button
-                      style={menuItemStyle({ danger: true })}
-                      onClick={() => { setMenuOpenId(null); excluirGrupo(l); }}
-                    >
+                    <button style={menuItemStyle({ danger: true })} onClick={() => { setMenuOpenId(null); excluirGrupo(l); }}>
                       🗑️ Excluir grupo
                     </button>
                   ) : null}
 
-                  <button
-                    style={menuItemStyle({ danger: true })}
-                    onClick={() => { setMenuOpenId(null); excluirLanc(l); }}
-                  >
+                  <button style={menuItemStyle({ danger: true })} onClick={() => { setMenuOpenId(null); excluirLanc(l); }}>
                     🗑️ Excluir
                   </button>
                 </div>
@@ -2107,10 +2013,7 @@ export default function Dashboard({ canWrite } = {}) {
         ) : null}
 
         {contaMenuOpenId ? (
-          <PortalMenu
-            anchorEl={contaMenuBtnRefs.get(contaMenuOpenId)}
-            onClose={() => setContaMenuOpenId(null)}
-          >
+          <PortalMenu anchorEl={contaBtnRefs.current.get(contaMenuOpenId)} onClose={() => setContaMenuOpenId(null)}>
             {(() => {
               const c = (contas || []).find((x) => x.id === contaMenuOpenId);
               if (!c) return null;
@@ -2120,10 +2023,7 @@ export default function Dashboard({ canWrite } = {}) {
                   <button style={menuItemStyle()} onClick={() => { setContaMenuOpenId(null); abrirEditarConta(c); }}>
                     ✏️ Editar
                   </button>
-                  <button
-                    style={menuItemStyle({ danger: true })}
-                    onClick={() => { setContaMenuOpenId(null); excluirConta(c); }}
-                  >
+                  <button style={menuItemStyle({ danger: true })} onClick={() => { setContaMenuOpenId(null); excluirConta(c); }}>
                     🗑️ Excluir
                   </button>
                 </div>
@@ -2133,10 +2033,7 @@ export default function Dashboard({ canWrite } = {}) {
         ) : null}
 
         {fixaMenuOpenId ? (
-          <PortalMenu
-            anchorEl={fixaMenuBtnRefs.get(fixaMenuOpenId)}
-            onClose={() => setFixaMenuOpenId(null)}
-          >
+          <PortalMenu anchorEl={fixaBtnRefs.current.get(fixaMenuOpenId)} onClose={() => setFixaMenuOpenId(null)}>
             {(() => {
               const f = (fixas || []).find((x) => x.id === fixaMenuOpenId);
               if (!f) return null;
@@ -2146,10 +2043,7 @@ export default function Dashboard({ canWrite } = {}) {
                   <button style={menuItemStyle()} onClick={() => { setFixaMenuOpenId(null); abrirEditarFixa(f); }}>
                     ✏️ Editar
                   </button>
-                  <button
-                    style={menuItemStyle({ danger: true })}
-                    onClick={() => { setFixaMenuOpenId(null); excluirFixa(f); }}
-                  >
+                  <button style={menuItemStyle({ danger: true })} onClick={() => { setFixaMenuOpenId(null); excluirFixa(f); }}>
                     🗑️ Excluir
                   </button>
                 </div>
@@ -2158,7 +2052,6 @@ export default function Dashboard({ canWrite } = {}) {
           </PortalMenu>
         ) : null}
 
-        {/* MODAIS — corrigidos para MOBILE: header fixo + scroll interno + safe-area */}
         {editOpen ? (
           <Modal title="Editar lançamento" onClose={fecharEditar}>
             <div style={{ display: "grid", gap: 10 }}>
@@ -2443,7 +2336,7 @@ function PortalMenu({ anchorEl, children, onClose }) {
 }
 
 /* ---------------------------
-   Styles (inclui MODAL MOBILE FIX)
+   Styles + CSS Global
 ---------------------------- */
 const styles = {
   page: { padding: 12, color: "var(--text)" },
@@ -2660,7 +2553,6 @@ const styles = {
     };
   },
 
-  /* MENU */
   menuOverlay: {
     position: "fixed",
     inset: 0,
@@ -2680,7 +2572,6 @@ const styles = {
   },
   menuBox: { display: "grid", gap: 8 },
 
-  /* MODAL — FIX MOBILE */
   modalOverlay: {
     position: "fixed",
     inset: 0,
@@ -2746,9 +2637,6 @@ const styles = {
   },
 };
 
-/* ---------------------------
-   CSS Global (responsivo + modal grid mobile)
----------------------------- */
 function globalCss() {
   return `
     @media (max-width: 720px){
@@ -2756,7 +2644,6 @@ function globalCss() {
     }
 
     @media (max-width: 640px){
-      /* modal grid vira 1 coluna no celular */
       [style*="grid-template-columns: repeat(2"]{
         grid-template-columns: 1fr !important;
       }
