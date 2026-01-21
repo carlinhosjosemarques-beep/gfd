@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 
 import Login from "./Login";
@@ -13,6 +13,9 @@ export default function App() {
   const [profile, setProfile] = useState(undefined);
   const [profileErr, setProfileErr] = useState(null);
   const [checkingProfile, setCheckingProfile] = useState(false);
+
+  const [signingOut, setSigningOut] = useState(false);
+  const lastFetchRef = useRef(0);
 
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem("gfd_theme");
@@ -125,7 +128,8 @@ export default function App() {
 
     const okByAccessStatus = accessStatus === "active";
     const okByGranted = accessGranted === true;
-    const okBySubscription = subStatus === "active" || subStatus === "paid" || subStatus === "approved";
+    const okBySubscription =
+      subStatus === "active" || subStatus === "paid" || subStatus === "approved";
 
     const canWrite = !!(okByAccessStatus || okByGranted || okBySubscription);
 
@@ -140,12 +144,30 @@ export default function App() {
   const accessInfo = useMemo(() => computeAccessInfo(profile), [profile]);
   const canWrite = accessInfo.canWrite;
 
-  async function fetchProfile(u) {
+  async function ensureProfileRow(u) {
+    if (!u?.id) return;
+    try {
+      const payload = {
+        id: u.id,
+        email: u.email ?? null,
+        updated_at: new Date().toISOString(),
+      };
+      await supabase.from("profiles").upsert(payload, { onConflict: "id" });
+    } catch {
+      // silencioso (se RLS impedir, tudo bem — webhook/trigger pode cuidar)
+    }
+  }
+
+  async function fetchProfile(u, { force = false } = {}) {
     if (!u?.id) {
       setProfile(undefined);
       setProfileErr(null);
       return;
     }
+
+    const now = Date.now();
+    if (!force && now - lastFetchRef.current < 1200) return;
+    lastFetchRef.current = now;
 
     setCheckingProfile(true);
     setProfileErr(null);
@@ -163,17 +185,35 @@ export default function App() {
     try {
       const colsAll =
         "id,email,created_at,updated_at,is_admin,access_status,access_until,subscription_status,access_granted,access_origin,access_expires_at";
-      const data1 = await trySelect(colsAll);
+      let data1 = await trySelect(colsAll);
+
+      if (data1 === null) {
+        await ensureProfileRow(u);
+        data1 = await trySelect(colsAll);
+      }
+
       setProfile(data1);
     } catch (e1) {
       try {
         const colsLegacy =
           "id,email,created_at,access_granted,access_origin,access_expires_at,subscription_status";
-        const data2 = await trySelect(colsLegacy);
+        let data2 = await trySelect(colsLegacy);
+
+        if (data2 === null) {
+          await ensureProfileRow(u);
+          data2 = await trySelect(colsLegacy);
+        }
+
         setProfile(data2);
       } catch (e2) {
         try {
-          const data3 = await trySelect("id,email,created_at");
+          let data3 = await trySelect("id,email,created_at");
+
+          if (data3 === null) {
+            await ensureProfileRow(u);
+            data3 = await trySelect("id,email,created_at");
+          }
+
           setProfile(data3);
         } catch (e3) {
           setProfile(undefined);
@@ -191,7 +231,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (user && user !== null) fetchProfile(user);
+    if (user && user !== null) fetchProfile(user, { force: true });
 
     if (user === null) {
       setProfile(undefined);
@@ -200,6 +240,36 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || user === null) return;
+
+    const onFocus = () => fetchProfile(user, { force: true });
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchProfile(user, { force: true });
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user === null) return;
+
+    // Se estiver em modo leitura, revalida automaticamente pra liberar assim que o webhook atualizar
+    if (canWrite) return;
+
+    const t = setInterval(() => {
+      fetchProfile(user, { force: true });
+    }, 8000);
+
+    return () => clearInterval(t);
+  }, [user, canWrite]);
 
   function fmtBRDateTime(d) {
     try {
@@ -214,7 +284,9 @@ export default function App() {
 
   function openRenew() {
     const url =
-      (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_GFD_RENEW_URL) ||
+      (typeof import.meta !== "undefined" &&
+        import.meta.env &&
+        import.meta.env.VITE_GFD_RENEW_URL) ||
       localStorage.getItem("gfd_renew_url") ||
       "";
     if (url) {
@@ -222,9 +294,40 @@ export default function App() {
       return;
     }
     alert(
-      "Link de renovação não configurado.\n\nDefina VITE_GFD_RENEW_URL no .env (ou salve em localStorage: gfd_renew_url)."
+      "Link de ativação/renovação não configurado.\n\nDefina VITE_GFD_RENEW_URL no .env (ou salve em localStorage: gfd_renew_url)."
     );
   }
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await supabase.auth.signOut();
+
+      try {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k) continue;
+          if (k.startsWith("sb-") || k.includes("supabase")) keys.push(k);
+        }
+        keys.forEach((k) => localStorage.removeItem(k));
+      } catch {}
+
+      setUser(null);
+      setProfile(undefined);
+      setProfileErr(null);
+
+      // Força o reload no desktop (resolve casos onde o botão "Sair" parece não fazer nada)
+      window.location.assign("/");
+    } catch (e) {
+      alert(e?.message || "Não foi possível sair. Tente novamente.");
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
+  const showReadOnlyBanner = user && user !== null && profile && accessInfo.canUseApp && !canWrite;
 
   if (user === undefined) {
     return (
@@ -267,15 +370,15 @@ export default function App() {
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
             <button
-              onClick={() => fetchProfile(user)}
+              onClick={() => fetchProfile(user, { force: true })}
               style={styles.primaryBtn}
               disabled={checkingProfile}
             >
               {checkingProfile ? "Aguarde..." : "Tentar novamente"}
             </button>
 
-            <button onClick={() => supabase.auth.signOut()} style={styles.dangerBtn}>
-              Sair
+            <button onClick={handleSignOut} style={styles.dangerBtn} disabled={signingOut}>
+              {signingOut ? "Saindo..." : "Sair"}
             </button>
           </div>
         </div>
@@ -287,33 +390,30 @@ export default function App() {
     return (
       <div style={styles.page}>
         <div style={{ ...styles.centerCard }}>
-          <div style={{ fontWeight: 1000, fontSize: 16 }}>
-            Seu perfil ainda não foi criado
-          </div>
+          <div style={{ fontWeight: 1000, fontSize: 16 }}>Seu perfil ainda não foi criado</div>
           <div
             style={{
               marginTop: 8,
-              color: "var(--muted)",
+              color: "var(--knowMuted, var(--muted))",
               fontWeight: 900,
               lineHeight: 1.4,
             }}
           >
-            Isso normalmente acontece quando o trigger de criação automática do perfil ainda
-            não está configurado no Supabase. Rode o SQL que eu te passei e depois clique
-            em atualizar.
+            Estou tentando criar automaticamente agora. Se mesmo assim não aparecer, seu
+            Supabase pode estar sem política/trigger para perfis.
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
             <button
-              onClick={() => fetchProfile(user)}
+              onClick={() => fetchProfile(user, { force: true })}
               style={styles.primaryBtn}
               disabled={checkingProfile}
             >
               {checkingProfile ? "Aguarde..." : "Atualizar"}
             </button>
 
-            <button onClick={() => supabase.auth.signOut()} style={styles.dangerBtn}>
-              Sair
+            <button onClick={handleSignOut} style={styles.dangerBtn} disabled={signingOut}>
+              {signingOut ? "Saindo..." : "Sair"}
             </button>
           </div>
         </div>
@@ -340,7 +440,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => fetchProfile(user)}
+              onClick={() => fetchProfile(user, { force: true })}
               style={styles.ghostBtn}
               disabled={checkingProfile}
               title="Recarregar status do acesso"
@@ -348,8 +448,8 @@ export default function App() {
               {checkingProfile ? "Verificando..." : "Já renovei (atualizar)"}
             </button>
 
-            <button onClick={() => supabase.auth.signOut()} style={styles.dangerBtn}>
-              Sair
+            <button onClick={handleSignOut} style={styles.dangerBtn} disabled={signingOut}>
+              {signingOut ? "Saindo..." : "Sair"}
             </button>
           </div>
 
@@ -366,8 +466,7 @@ export default function App() {
               fontSize: 13,
             }}
           >
-            Dica: você pode configurar o link de renovação usando <b>VITE_GFD_RENEW_URL</b> no
-            seu <b>.env</b>.
+            Dica: configure o link com <b>VITE_GFD_RENEW_URL</b> no seu <b>.env</b>.
           </div>
         </div>
       </div>
@@ -408,6 +507,12 @@ export default function App() {
           </div>
 
           <div style={styles.topbarActions}>
+            {!canWrite ? (
+              <button onClick={openRenew} style={styles.primaryBtn} title="Ativar/Renovar assinatura">
+                Ativar / Renovar
+              </button>
+            ) : null}
+
             <button
               onClick={() => setTheme((p) => (p === "dark" ? "light" : "dark"))}
               style={styles.ghostBtn}
@@ -417,11 +522,12 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => supabase.auth.signOut()}
+              onClick={handleSignOut}
               style={styles.dangerBtn}
               title="Sair"
+              disabled={signingOut}
             >
-              Sair
+              {signingOut ? "Saindo..." : "Sair"}
             </button>
           </div>
         </header>
@@ -451,6 +557,29 @@ export default function App() {
             🎯 Metas
           </button>
         </nav>
+
+        {showReadOnlyBanner ? (
+          <div style={styles.readOnlyBanner}>
+            <div style={{ fontWeight: 1000, letterSpacing: -0.2 }}>
+              🔒 Modo leitura (assinatura inativa)
+            </div>
+            <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 850, lineHeight: 1.35 }}>
+              Você pode visualizar seus dados, mas não pode criar, editar ou excluir.
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+              <button onClick={openRenew} style={styles.primaryBtn}>
+                Ativar / Renovar assinatura
+              </button>
+              <button
+                onClick={() => fetchProfile(user, { force: true })}
+                style={styles.ghostBtn}
+                disabled={checkingProfile}
+              >
+                {checkingProfile ? "Verificando..." : "Já paguei (atualizar)"}
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <main style={styles.content}>
           {tab === "dashboard" && <Dashboard canWrite={canWrite} />}
@@ -545,6 +674,7 @@ const styles = {
     display: "flex",
     gap: 10,
     alignItems: "center",
+    flexWrap: "wrap",
   },
 
   tabs: {
@@ -554,6 +684,15 @@ const styles = {
     flexWrap: "wrap",
     alignItems: "center",
     width: "100%",
+  },
+
+  readOnlyBanner: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 18,
+    border: "1px solid rgba(239,68,68,0.28)",
+    background: "linear-gradient(180deg, rgba(239,68,68,0.10), rgba(2,6,23,0.06))",
+    boxShadow: "0 18px 40px rgba(0,0,0,0.18)",
   },
 
   content: {

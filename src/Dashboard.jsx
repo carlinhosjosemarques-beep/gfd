@@ -21,7 +21,6 @@ function money(n) {
     .format(Number(n || 0));
 }
 
-// yyyy-mm-dd (LOCAL)
 function ymd(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -33,18 +32,13 @@ function ym(ano, mes) {
   return `${ano}-${String(mes + 1).padStart(2, "0")}`;
 }
 
-// Parse BR seguro (não “trava” digitação e aceita 1.234,56 / 1234,56 / 1234.56)
 function parseValor(str) {
   const s0 = String(str ?? "").trim();
   if (!s0) return 0;
 
   let s = s0.replace(/\s/g, "");
-
   const hasComma = s.includes(",");
-  if (hasComma) {
-    s = s.replace(/\./g, "").replace(",", ".");
-  }
-
+  if (hasComma) s = s.replace(/\./g, "").replace(",", ".");
   s = s.replace(/[^\d.-]/g, "");
 
   const v = Number(s);
@@ -64,7 +58,6 @@ function uuidLike() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-// remove sufixo " (i/n)" no final
 function stripParcelaSuffix(desc) {
   const s = String(desc ?? "").trim();
   return s.replace(/\s*\(\s*\d+\s*\/\s*\d+\s*\)\s*$/g, "").trim();
@@ -208,11 +201,32 @@ function CollapseSection({ id, title, subtitle, open, onToggle, children, rightS
     </div>
   );
 }
+
 export default function Dashboard({ canWrite } = {}) {
   function guardWrite(msg = "Assinatura inativa. Você está no modo leitura.") {
     if (canWrite) return true;
     alert(msg);
     return false;
+  }
+
+  function openRenew() {
+    const url =
+      (typeof import.meta !== "undefined" &&
+        import.meta.env &&
+        import.meta.env.VITE_GFD_RENEW_URL) ||
+      localStorage.getItem("gfd_renew_url") ||
+      "";
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    alert(
+      "Link de ativação/renovação não configurado.\n\nDefina VITE_GFD_RENEW_URL no .env (ou salve em localStorage: gfd_renew_url)."
+    );
+  }
+
+  function refreshAccess() {
+    window.location.reload();
   }
 
   const hoje = new Date();
@@ -253,7 +267,6 @@ export default function Dashboard({ canWrite } = {}) {
 
   const defaultCollapsedMobile = useMemo(() => isMobileNow(), []);
 
-  // visibilidade (personalizar)
   const [uiPersonalizarOpen, setUiPersonalizarOpen] = useState(() => safeBoolLS("gfd_ui_personalizar", false));
   const [uiShowContas, setUiShowContas] = useState(() => safeBoolLS("gfd_ui_contas", !defaultCollapsedMobile));
   const [uiShowFixas, setUiShowFixas] = useState(() => safeBoolLS("gfd_ui_fixas", !defaultCollapsedMobile));
@@ -272,7 +285,6 @@ export default function Dashboard({ canWrite } = {}) {
   useEffect(() => setBoolLS("gfd_ui_lista_parcelas", uiShowListaParcelas), [uiShowListaParcelas]);
   useEffect(() => setBoolLS("gfd_ui_lista_avulsos", uiShowListaAvulsos), [uiShowListaAvulsos]);
 
-  // aberto/fechado (collapse)
   const [uiOpenContas, setUiOpenContas] = useState(() => safeBoolLS("gfd_open_contas", !defaultCollapsedMobile));
   const [uiOpenFixas, setUiOpenFixas] = useState(() => safeBoolLS("gfd_open_fixas", !defaultCollapsedMobile));
   const [uiOpenNovo, setUiOpenNovo] = useState(() => safeBoolLS("gfd_open_novo", !defaultCollapsedMobile));
@@ -297,7 +309,6 @@ export default function Dashboard({ canWrite } = {}) {
     return t === "input" || t === "textarea" || t === "select" || el?.isContentEditable;
   }
 
-  // menus ⋮ (lancamentos)
   const [menuOpenId, setMenuOpenId] = useState(null);
   const menuBtnRefs = useRef(new Map());
   function setMenuBtnRef(id, node) {
@@ -310,7 +321,6 @@ export default function Dashboard({ canWrite } = {}) {
     setMenuOpenId((prev) => (prev === id ? null : id));
   }
 
-  // menus ⋮ (contas)
   const [contaMenuOpenId, setContaMenuOpenId] = useState(null);
   const contaBtnRefs = useRef(new Map());
   function setContaBtnRef(id, node) {
@@ -324,7 +334,6 @@ export default function Dashboard({ canWrite } = {}) {
     setContaMenuOpenId((prev) => (prev === id ? null : id));
   }
 
-  // menus ⋮ (fixas)
   const [fixaMenuOpenId, setFixaMenuOpenId] = useState(null);
   const fixaBtnRefs = useRef(new Map());
   function setFixaBtnRef(id, node) {
@@ -366,7 +375,6 @@ export default function Dashboard({ canWrite } = {}) {
     };
   }, [menuOpenId, contaMenuOpenId, fixaMenuOpenId]);
 
-  // CONTAS
   const [contas, setContas] = useState([]);
   const [loadingContas, setLoadingContas] = useState(false);
 
@@ -464,7 +472,6 @@ export default function Dashboard({ canWrite } = {}) {
     await carregarLancamentos();
   }
 
-  // LANCAMENTOS (state vem antes porque excluirConta checa lançamentos)
   const [lancamentos, setLancamentos] = useState([]);
 
   async function excluirConta(c) {
@@ -506,7 +513,6 @@ export default function Dashboard({ canWrite } = {}) {
     return m;
   }, [contas]);
 
-  // FIXAS
   const [fixas, setFixas] = useState([]);
   const [fixasOk, setFixasOk] = useState(true);
   const [loadingFixas, setLoadingFixas] = useState(false);
@@ -713,7 +719,6 @@ export default function Dashboard({ canWrite } = {}) {
     await carregarLancamentos();
   }
 
-  // NOVO LANCAMENTO
   const [data, setData] = useState(ymd(hoje));
   const [valor, setValor] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -723,7 +728,6 @@ export default function Dashboard({ canWrite } = {}) {
   const [qtdParcelas, setQtdParcelas] = useState(2);
   const [modoParcela, setModoParcela] = useState("dividir");
 
-  // KPIs
   const [receitasRecebidas, setReceitasRecebidas] = useState(0);
   const [despesasPagas, setDespesasPagas] = useState(0);
   const [despesasAPagar, setDespesasAPagar] = useState(0);
@@ -903,7 +907,6 @@ export default function Dashboard({ canWrite } = {}) {
     await carregarLancamentos();
   }
 
-  // EDITAR LANC
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState("");
@@ -964,8 +967,6 @@ export default function Dashboard({ canWrite } = {}) {
     fecharEditar();
     await carregarLancamentos();
   }
-
-  // EDITAR GRUPO
   const [editGroupOpen, setEditGroupOpen] = useState(false);
   const [grpRef, setGrpRef] = useState(null);
   const [grpDescricaoBase, setGrpDescricaoBase] = useState("");
@@ -1124,7 +1125,6 @@ export default function Dashboard({ canWrite } = {}) {
     return () => window.removeEventListener("keydown", onKey);
   }, [editOpen, editGroupOpen, editContaOpen, editFixaOpen, canWrite]);
 
-  // saldo por conta
   const saldosPorConta = useMemo(() => {
     const map = new Map();
     for (const c of contas || []) {
@@ -1162,7 +1162,6 @@ export default function Dashboard({ canWrite } = {}) {
 
   const fixaIdsSet = useMemo(() => new Set((fixas || []).map((f) => f.id).filter(Boolean)), [fixas]);
 
-  // busca + chips + sort
   const [busca, setBusca] = useState("");
   const buscaDeb = useDebouncedValue(busca, 220);
 
@@ -1467,7 +1466,6 @@ export default function Dashboard({ canWrite } = {}) {
   const categoriasFixaNovo = fixaTipo === "despesa" ? categoriasDespesa : categoriasReceita;
   const categoriasFixaEdit = editFixaTipo === "despesa" ? categoriasDespesa : categoriasReceita;
 
-  // aliases (mantive)
   const contaSaldo = contaSaldoInicial;
   const setContaSaldo = setContaSaldoInicial;
   const salvarConta = criarConta;
@@ -1519,7 +1517,20 @@ export default function Dashboard({ canWrite } = {}) {
                   color: "var(--text)",
                 }}
               >
-                🔒 Sua assinatura está inativa. Você pode <b>visualizar</b> seus dados, mas não pode <b>criar, editar ou excluir</b>.
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span>
+                    🔒 Sua assinatura está inativa. Você pode <b>visualizar</b> seus dados, mas não pode <b>criar, editar ou excluir</b>.
+                  </span>
+
+                  <span style={{ marginLeft: "auto", display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button onClick={openRenew} style={styles.primaryBtn} type="button">
+                      Ativar / Renovar assinatura
+                    </button>
+                    <button onClick={refreshAccess} style={styles.secondaryBtn} type="button">
+                      Já paguei (atualizar)
+                    </button>
+                  </span>
+                </div>
               </div>
             ) : null}
 
@@ -1537,16 +1548,24 @@ export default function Dashboard({ canWrite } = {}) {
             </div>
           </div>
 
-          <button
-            onClick={() => setUiPersonalizarOpen((v) => !v)}
-            style={styles.secondaryBtn}
-            aria-expanded={uiPersonalizarOpen}
-            aria-label="Abrir personalização do dashboard"
-            title="Personalizar"
-            type="button"
-          >
-            ⚙️ Personalizar
-          </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            {!canWrite ? (
+              <button onClick={openRenew} style={styles.primaryBtn} type="button">
+                Ativar / Renovar
+              </button>
+            ) : null}
+
+            <button
+              onClick={() => setUiPersonalizarOpen((v) => !v)}
+              style={styles.secondaryBtn}
+              aria-expanded={uiPersonalizarOpen}
+              aria-label="Abrir personalização do dashboard"
+              title="Personalizar"
+              type="button"
+            >
+              ⚙️ Personalizar
+            </button>
+          </div>
         </div>
 
         {uiPersonalizarOpen ? (
@@ -1632,7 +1651,6 @@ export default function Dashboard({ canWrite } = {}) {
             <div style={styles.kpiHint}>Considera saldo inicial + lançamentos pagos</div>
           </div>
         </div>
-
         {uiShowContas ? (
           <CollapseSection
             id="contas"
@@ -1718,6 +1736,7 @@ export default function Dashboard({ canWrite } = {}) {
             </div>
           </CollapseSection>
         ) : null}
+
         {uiShowFixas && fixasOk ? (
           <CollapseSection
             id="fixas"
@@ -1974,6 +1993,12 @@ export default function Dashboard({ canWrite } = {}) {
                 <button onClick={exportarCsv} style={styles.secondaryBtn} disabled={!canWrite} title={!canWrite ? "Modo leitura" : "Exportar CSV"} type="button">
                   ⬇️ Exportar CSV
                 </button>
+
+                {!canWrite ? (
+                  <button onClick={openRenew} style={styles.primaryBtn} type="button">
+                    Ativar / Renovar
+                  </button>
+                ) : null}
               </div>
 
               <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -2306,9 +2331,6 @@ export default function Dashboard({ canWrite } = {}) {
   );
 }
 
-/* ---------------------------
-   PortalMenu (menus ⋮ mobile-safe)
----------------------------- */
 function PortalMenu({ anchorEl, children, onClose }) {
   const [pos, setPos] = useState(null);
 
@@ -2364,9 +2386,6 @@ function PortalMenu({ anchorEl, children, onClose }) {
   );
 }
 
-/* ---------------------------
-   Styles + CSS Global
----------------------------- */
 const styles = {
   page: { padding: 12, color: "var(--text)" },
   container: { maxWidth: 1180, margin: "0 auto" },
@@ -2681,7 +2700,6 @@ const styles = {
 
 function globalCss() {
   return `
-/* Fallbacks pra evitar card branco se alguma variável não existir */
 :root{
   --shadowSoft: 0 10px 24px rgba(0,0,0,.06);
   --danger: rgba(239,68,68,1);
