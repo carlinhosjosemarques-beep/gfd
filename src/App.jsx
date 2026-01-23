@@ -23,6 +23,13 @@ export default function App() {
     return "light";
   });
 
+  // ✅ NOVO: menu avatar + modal perfil
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const avatarRef = useRef(null);
+  const [fullNameDraft, setFullNameDraft] = useState("");
+
   useEffect(() => {
     localStorage.setItem("gfd_theme", theme);
 
@@ -144,6 +151,19 @@ export default function App() {
   const accessInfo = useMemo(() => computeAccessInfo(profile), [profile]);
   const canWrite = accessInfo.canWrite;
 
+  // ✅ NOVO: saudação
+  const greetingName = useMemo(() => {
+    const full = String(profile?.full_name || "").trim();
+    const first = full.split(/\s+/).filter(Boolean)[0];
+    if (first) return first;
+
+    const email = String(user?.email || "").trim();
+    if (email && email.includes("@")) return email.split("@")[0];
+    return "";
+  }, [profile?.full_name, user?.email]);
+
+  const greeting = greetingName ? `Olá, ${greetingName}` : "Olá";
+
   async function ensureProfileRow(u) {
     if (!u?.id) return;
     try {
@@ -184,7 +204,7 @@ export default function App() {
 
     try {
       const colsAll =
-        "id,email,created_at,updated_at,is_admin,access_status,access_until,subscription_status,access_granted,access_origin,access_expires_at";
+        "id,email,created_at,updated_at,is_admin,access_status,access_until,subscription_status,access_granted,access_origin,access_expires_at,full_name";
       let data1 = await trySelect(colsAll);
 
       if (data1 === null) {
@@ -196,7 +216,7 @@ export default function App() {
     } catch (e1) {
       try {
         const colsLegacy =
-          "id,email,created_at,access_granted,access_origin,access_expires_at,subscription_status";
+          "id,email,created_at,access_granted,access_origin,access_expires_at,subscription_status,full_name";
         let data2 = await trySelect(colsLegacy);
 
         if (data2 === null) {
@@ -207,11 +227,11 @@ export default function App() {
         setProfile(data2);
       } catch (e2) {
         try {
-          let data3 = await trySelect("id,email,created_at");
+          let data3 = await trySelect("id,email,created_at,full_name");
 
           if (data3 === null) {
             await ensureProfileRow(u);
-            data3 = await trySelect("id,email,created_at");
+            data3 = await trySelect("id,email,created_at,full_name");
           }
 
           setProfile(data3);
@@ -271,12 +291,36 @@ export default function App() {
     return () => clearInterval(t);
   }, [user, canWrite]);
 
+  // ✅ NOVO: fechar dropdown ao clicar fora
+  useEffect(() => {
+    function onDoc(e) {
+      if (!avatarOpen) return;
+      if (!avatarRef.current) return;
+      if (!avatarRef.current.contains(e.target)) setAvatarOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [avatarOpen]);
+
+  // ✅ NOVO: manter draft sincronizado quando abrir modal
+  useEffect(() => {
+    if (profileModalOpen) setFullNameDraft(String(profile?.full_name || ""));
+  }, [profileModalOpen, profile?.full_name]);
+
   function fmtBRDateTime(d) {
     try {
       return new Intl.DateTimeFormat("pt-BR", {
         dateStyle: "short",
         timeStyle: "short",
       }).format(d);
+    } catch {
+      return d ? String(d) : "";
+    }
+  }
+
+  function fmtBRDateOnly(d) {
+    try {
+      return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(d);
     } catch {
       return d ? String(d) : "";
     }
@@ -326,6 +370,38 @@ export default function App() {
       setSigningOut(false);
     }
   }
+
+  // ✅ NOVO: salvar nome no perfil
+  async function saveProfileName() {
+    if (!user?.id) return;
+    const name = String(fullNameDraft || "").trim();
+
+    setSavingProfile(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: name, updated_at: new Date().toISOString() })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      await fetchProfile(user, { force: true });
+      setProfileModalOpen(false);
+    } catch (e) {
+      alert(e?.message || "Erro ao salvar nome");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  // ✅ NOVO: iniciais do avatar
+  const avatarInitials = useMemo(() => {
+    const base = String(profile?.full_name || user?.email || "U").trim();
+    const parts = base.split(/\s+/).filter(Boolean);
+    const a = (parts[0]?.[0] || "U").toUpperCase();
+    const b = (parts[1]?.[0] || "").toUpperCase();
+    return `${a}${b}`.slice(0, 2);
+  }, [profile?.full_name, user?.email]);
 
   const showReadOnlyBanner = user && user !== null && profile && accessInfo.canUseApp && !canWrite;
 
@@ -484,6 +560,11 @@ export default function App() {
               <div style={styles.brandSub}>Gestão Financeira Descomplicada</div>
             </div>
 
+            {/* ✅ NOVO: saudação no topo (global) */}
+            <div style={styles.greeting} title={user?.email || ""}>
+              {greeting}
+            </div>
+
             {!canWrite ? (
               <span
                 style={{
@@ -521,14 +602,71 @@ export default function App() {
               {tokens.dark ? "🌙 Dark" : "☀️ Light"}
             </button>
 
-            <button
-              onClick={handleSignOut}
-              style={styles.dangerBtn}
-              title="Sair"
-              disabled={signingOut}
-            >
-              {signingOut ? "Saindo..." : "Sair"}
-            </button>
+            {/* ✅ NOVO: avatar com menu (substitui o “Sair” visível, mas mantém função) */}
+            <div style={styles.avatarWrap} ref={avatarRef}>
+              <button
+                onClick={() => setAvatarOpen((v) => !v)}
+                style={styles.avatarBtn}
+                title="Menu do perfil"
+                aria-haspopup="menu"
+                aria-expanded={avatarOpen ? "true" : "false"}
+              >
+                <span style={styles.avatarCircle}>{avatarInitials}</span>
+              </button>
+
+              {avatarOpen ? (
+                <div style={styles.avatarMenu} role="menu">
+                  <button
+                    style={styles.menuItem}
+                    role="menuitem"
+                    onClick={() => {
+                      setAvatarOpen(false);
+                      setProfileModalOpen(true);
+                    }}
+                  >
+                    👤 Perfil
+                  </button>
+
+                  <button
+                    style={styles.menuItem}
+                    role="menuitem"
+                    onClick={() => {
+                      setAvatarOpen(false);
+                      openRenew();
+                    }}
+                  >
+                    {canWrite ? "🧾 Gerenciar assinatura" : "🧾 Ativar / Renovar"}
+                  </button>
+
+                  <button
+                    style={styles.menuItem}
+                    role="menuitem"
+                    disabled={checkingProfile}
+                    onClick={() => {
+                      setAvatarOpen(false);
+                      fetchProfile(user, { force: true });
+                    }}
+                    title="Recarregar status"
+                  >
+                    🔄 {checkingProfile ? "Atualizando..." : "Já paguei (atualizar)"}
+                  </button>
+
+                  <div style={styles.menuSep} />
+
+                  <button
+                    style={{ ...styles.menuItem, ...styles.menuDanger }}
+                    role="menuitem"
+                    disabled={signingOut}
+                    onClick={() => {
+                      setAvatarOpen(false);
+                      handleSignOut();
+                    }}
+                  >
+                    🚪 {signingOut ? "Saindo..." : "Sair"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
@@ -593,6 +731,60 @@ export default function App() {
           </span>
         </footer>
       </div>
+
+      {/* ✅ NOVO: Modal Perfil */}
+      {profileModalOpen ? (
+        <div
+          style={styles.modalBackdrop}
+          onMouseDown={() => setProfileModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div style={styles.modal} onMouseDown={(e) => e.stopPropagation()}>
+            <div style={styles.modalTitle}>Perfil</div>
+
+            <div style={styles.modalField}>
+              <div style={styles.modalLabel}>Nome</div>
+              <input
+                value={fullNameDraft}
+                onChange={(e) => setFullNameDraft(e.target.value)}
+                placeholder="Seu nome"
+                style={styles.modalInput}
+              />
+            </div>
+
+            <div style={styles.modalField}>
+              <div style={styles.modalLabel}>E-mail</div>
+              <input value={String(user?.email || "")} disabled style={styles.modalInput} />
+            </div>
+
+            <div style={styles.modalField}>
+              <div style={styles.modalLabel}>Assinatura</div>
+              <div style={{ fontWeight: 1000 }}>
+                {canWrite ? "Ativa" : "Inativa (modo leitura)"}
+                {accessInfo?.until ? ` • até ${fmtBRDateOnly(accessInfo.until)}` : ""}
+              </div>
+              <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 850 }}>
+                Origem: {String(profile?.access_origin || "—")} • Status:{" "}
+                {String(profile?.subscription_status || profile?.access_status || "—")}
+              </div>
+            </div>
+
+            <div style={styles.modalActions}>
+              <button
+                style={styles.ghostBtn}
+                onClick={() => setProfileModalOpen(false)}
+                disabled={savingProfile}
+              >
+                Cancelar
+              </button>
+              <button style={styles.primaryBtn} onClick={saveProfileName} disabled={savingProfile}>
+                {savingProfile ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -656,6 +848,7 @@ const styles = {
     gap: 10,
     alignItems: "center",
     minWidth: 240,
+    flexWrap: "wrap",
   },
   brandTitle: {
     fontWeight: 1000,
@@ -668,6 +861,17 @@ const styles = {
     fontWeight: 800,
     fontSize: 12,
     marginTop: 2,
+  },
+
+  greeting: {
+    marginLeft: 10,
+    padding: "7px 10px",
+    borderRadius: 999,
+    border: "1px solid var(--border)",
+    background: "rgba(255,255,255,0.05)",
+    fontWeight: 1000,
+    fontSize: 13,
+    letterSpacing: -0.15,
   },
 
   topbarActions: {
@@ -762,6 +966,89 @@ const styles = {
     margin: "0 auto",
     animation: "gfdSpin 1s linear infinite",
   },
+
+  // ✅ NOVO: avatar/menu/modal
+  avatarWrap: { position: "relative" },
+  avatarBtn: {
+    border: "1px solid var(--border)",
+    background: "rgba(255,255,255,0.05)",
+    color: "var(--text)",
+    padding: 4,
+    borderRadius: 999,
+    cursor: "pointer",
+    outline: "none",
+  },
+  avatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 1100,
+    letterSpacing: -0.3,
+    border: "1px solid rgba(148,163,184,0.20)",
+    background: "rgba(2,6,23,0.10)",
+  },
+  avatarMenu: {
+    position: "absolute",
+    right: 0,
+    top: 48,
+    minWidth: 240,
+    borderRadius: 16,
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    boxShadow: "var(--shadowSoft)",
+    overflow: "hidden",
+    zIndex: 50,
+  },
+  menuItem: {
+    width: "100%",
+    textAlign: "left",
+    padding: "12px 12px",
+    background: "transparent",
+    border: "none",
+    color: "var(--text)",
+    cursor: "pointer",
+    fontWeight: 950,
+  },
+  menuSep: { height: 1, background: "rgba(148,163,184,0.18)" },
+  menuDanger: { color: "var(--text)", background: "rgba(239,68,68,0.10)" },
+
+  modalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.38)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+    zIndex: 90,
+  },
+  modal: {
+    width: "min(560px, 96vw)",
+    borderRadius: 18,
+    border: "1px solid var(--border)",
+    background: "var(--card)",
+    boxShadow: "var(--shadowSoft)",
+    padding: 16,
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
+  },
+  modalTitle: { fontWeight: 1100, fontSize: 16, letterSpacing: -0.2, marginBottom: 12 },
+  modalField: { marginBottom: 12 },
+  modalLabel: { fontSize: 12, color: "var(--muted)", fontWeight: 900, marginBottom: 6 },
+  modalInput: {
+    width: "100%",
+    padding: 12,
+    borderRadius: 14,
+    border: "1px solid var(--border)",
+    background: "var(--controlBg2)",
+    color: "var(--text)",
+    outline: "none",
+    fontWeight: 900,
+  },
+  modalActions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 },
 };
 
 function LogoMark() {
