@@ -25,14 +25,6 @@ function timingSafeEq(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
-function normalizeSig(sig) {
-  return String(sig || "")
-    .trim()
-    .replace(/^sha1\s*=\s*/i, "")
-    .replace(/^hmac\s*=\s*/i, "")
-    .toLowerCase();
-}
-
 function readSignature(req) {
   const q = req.query || {};
   const h = req.headers || {};
@@ -42,12 +34,11 @@ function readSignature(req) {
     (h["x-kiwify-signature"] ||
       h["x-webhook-signature"] ||
       h["x-signature"] ||
-      h["x-hook-signature"] ||
       "")
       .toString()
       .trim();
 
-  return normalizeSig(sigQuery || sigHeader || "");
+  return sigQuery || sigHeader || "";
 }
 
 function readFixedToken(req, body) {
@@ -62,7 +53,7 @@ function readFixedToken(req, body) {
       .trim();
 
   const bodyToken =
-    (body?.token || body?.webhook_token || body?.secret || body?.data?.token || "")
+    (body?.token || body?.webhook_token || body?.secret || "")
       .toString()
       .trim();
 
@@ -81,20 +72,102 @@ function parseJsonSafe(rawText) {
   }
 }
 
-function pickEmail(body) {
-  const email =
-    body?.customer?.email ||
-    body?.buyer?.email ||
-    body?.customer_email ||
-    body?.email ||
-    body?.data?.customer?.email ||
-    body?.data?.buyer?.email ||
-    body?.data?.email ||
-    body?.data?.customer_email ||
-    body?.data?.customer?.email_address ||
-    body?.customer?.email_address;
+function isEmailLike(v) {
+  const s = String(v || "").trim();
+  return s.includes("@") && s.includes(".") && s.length <= 254;
+}
 
-  return email ? String(email).toLowerCase().trim() : "";
+function getPath(obj, path) {
+  try {
+    return path.split(".").reduce((acc, k) => (acc ? acc[k] : undefined), obj);
+  } catch {
+    return undefined;
+  }
+}
+
+function findFirstEmailDeep(obj, maxNodes = 5000) {
+  const queue = [{ v: obj, d: 0 }];
+  let visited = 0;
+
+  while (queue.length) {
+    const { v, d } = queue.shift();
+    visited++;
+    if (visited > maxNodes) break;
+
+    if (isEmailLike(v)) return String(v).toLowerCase().trim();
+    if (!v || typeof v !== "object") continue;
+
+    const keys = Object.keys(v);
+    for (const k of keys) {
+      const val = v[k];
+
+      // prioridade: chaves comuns
+      const kn = String(k).toLowerCase();
+      if (
+        kn === "email" ||
+        kn === "customer_email" ||
+        kn === "buyer_email" ||
+        kn === "client_email" ||
+        kn === "user_email"
+      ) {
+        if (isEmailLike(val)) return String(val).toLowerCase().trim();
+      }
+
+      // varre também strings parecidas
+      if (typeof val === "string" && kn.includes("mail") && isEmailLike(val)) {
+        return String(val).toLowerCase().trim();
+      }
+
+      if (typeof val === "object" && val !== null && d < 8) {
+        queue.push({ v: val, d: d + 1 });
+      }
+    }
+  }
+
+  return "";
+}
+
+function pickEmail(body) {
+  // caminhos mais comuns (inclui variações que a Kiwify costuma mandar)
+  const candidates = [
+    "customer.email",
+    "buyer.email",
+    "buyerEmail",
+    "buyer_email",
+    "customer_email",
+    "email",
+    "data.customer.email",
+    "data.buyer.email",
+    "data.customer_email",
+    "data.buyer_email",
+    "data.email",
+
+    // variações dentro de order/purchase
+    "order.customer.email",
+    "order.buyer.email",
+    "order.customer_email",
+    "order.buyer_email",
+    "order.email",
+    "data.order.customer.email",
+    "data.order.buyer.email",
+    "data.order.customer_email",
+    "data.order.buyer_email",
+    "data.order.email",
+
+    // variações com letras maiúsculas (alguns webhooks usam)
+    "Customer.email",
+    "Buyer.email",
+    "Order.Customer.email",
+    "Order.Buyer.email",
+  ];
+
+  for (const p of candidates) {
+    const v = getPath(body, p);
+    if (isEmailLike(v)) return String(v).toLowerCase().trim();
+  }
+
+  // fallback: varredura profunda
+  return findFirstEmailDeep(body);
 }
 
 function pickEvent(body) {
@@ -102,13 +175,13 @@ function pickEvent(body) {
     body?.event ||
     body?.type ||
     body?.webhook_event ||
-    body?.event_name ||
-    body?.name ||
     body?.data?.event ||
     body?.data?.type ||
     body?.data?.webhook_event ||
-    body?.data?.event_name ||
-    body?.data?.name ||
+    body?.order?.event ||
+    body?.order?.type ||
+    body?.data?.order?.event ||
+    body?.data?.order?.type ||
     ""
   );
 }
@@ -120,71 +193,45 @@ function pickStatus(body) {
     body?.subscription?.status ||
     body?.order_status ||
     body?.data?.order_status ||
-    body?.sale_status ||
-    body?.data?.sale_status ||
-    body?.payment_status ||
-    body?.data?.payment_status ||
+    body?.order?.status ||
+    body?.order?.order_status ||
+    body?.data?.order?.status ||
+    body?.data?.order?.order_status ||
     ""
   );
 }
 
 function inferPaidBlocked(event, status) {
-  const e = String(event || "");
-  const s = String(status || "");
-  const norm = `${e} ${s}`.toLowerCase().trim();
+  const norm = `${event} ${status}`.toLowerCase();
 
-  const paidNeedles = [
-    "compra aprovada",
-    "compra_aprovada",
-    "purchase_approved",
-    "approved",
-    "aprov",
-    "paid",
-    "pago",
-    "completed",
-    "success",
-    "confirmed",
-    "confirmado",
-    "payment_approved",
-    "pix_paid",
-    "pix aprovado",
-    "assinatura renovada",
-    "assinatura_renovada",
-    "subscription_renewed",
-    "renewed",
-    "renew",
-    "assinatura ativa",
-    "assinatura_ativa",
-    "active",
-  ];
+  const isPaid =
+    norm.includes("paid") ||
+    norm.includes("approved") ||
+    norm.includes("aprov") ||
+    norm.includes("active") ||
+    norm.includes("assinatura_ativa") ||
+    norm.includes("assinatura ativa") ||
+    norm.includes("renewed") ||
+    norm.includes("renov") ||
+    norm.includes("completed") ||
+    norm.includes("success") ||
+    norm.includes("compra aprovada");
 
-  const blockedNeedles = [
-    "compra recusada",
-    "compra_recusada",
-    "purchase_refused",
-    "refused",
-    "recused",
-    "failed",
-    "cancelada",
-    "canceled",
-    "cancelled",
-    "cancel",
-    "reembolso",
-    "refunded",
-    "estorno",
-    "chargeback",
-    "expired",
-    "expir",
-    "past_due",
-    "overdue",
-    "atrasada",
-    "inadimpl",
-    "inactive",
-    "inativa",
-  ];
-
-  const isPaid = paidNeedles.some((k) => norm.includes(k));
-  const isBlocked = blockedNeedles.some((k) => norm.includes(k));
+  const isBlocked =
+    norm.includes("canceled") ||
+    norm.includes("cancel") ||
+    norm.includes("refunded") ||
+    norm.includes("refund") ||
+    norm.includes("estorno") ||
+    norm.includes("chargeback") ||
+    norm.includes("past_due") ||
+    norm.includes("overdue") ||
+    norm.includes("inadimpl") ||
+    norm.includes("expired") ||
+    norm.includes("refused") ||
+    norm.includes("recused") ||
+    norm.includes("failed") ||
+    norm.includes("compra recusada");
 
   return { isPaid, isBlocked, norm };
 }
@@ -195,8 +242,17 @@ function addDaysISOFrom(baseDate, days) {
   return d.toISOString();
 }
 
+function normalizeSupabaseUrl(u) {
+  const s = String(u || "").trim();
+  if (!s) return "";
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  return `https://${s}`;
+}
+
 function getSupabase() {
-  const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
+  const urlRaw = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
+  const url = normalizeSupabaseUrl(urlRaw);
+
   const key =
     env("SUPABASE_SERVICE_ROLE_KEY") ||
     env("SUPABASE_SERVICE_ROLE") ||
@@ -217,22 +273,6 @@ async function tryInsertPayment(supabase, payload) {
   } catch (e) {
     console.warn("[KIWIFY] payments insert skipped:", e?.message || e);
   }
-}
-
-function pickOrderId(body) {
-  return (
-    body?.order_id ||
-    body?.order?.id ||
-    body?.sale_id ||
-    body?.sale?.id ||
-    body?.subscription?.id ||
-    body?.data?.order_id ||
-    body?.data?.order?.id ||
-    body?.data?.sale_id ||
-    body?.data?.sale?.id ||
-    body?.data?.subscription?.id ||
-    ""
-  );
 }
 
 export default async function handler(req, res) {
@@ -259,36 +299,29 @@ export default async function handler(req, res) {
       env("KIWIFY_WEBHOOK_TOKEN") || env("KIWIFY_WEBHOOK_TOKEN_SECRET");
 
     if (debug) {
+      console.log("[KIWIFY] raw len:", raw.length);
       console.log("[KIWIFY] sig received:", maskToken(receivedSig));
       console.log("[KIWIFY] has secret:", Boolean(secretForSignature));
       console.log("[KIWIFY] has token:", Boolean(tokenExpected));
       console.log("[KIWIFY] query keys:", Object.keys(req.query || {}));
       console.log("[KIWIFY] headers keys:", Object.keys(req.headers || {}));
       console.log("[KIWIFY] body keys:", Object.keys(body || {}));
-      console.log("[KIWIFY] raw len:", raw.length);
     }
 
     // Auth: assinatura (preferida) ou token fixo (fallback)
     if (receivedSig && secretForSignature) {
-      const expectedSig = normalizeSig(computeHmacSha1Hex(secretForSignature, raw));
+      const expectedSig = computeHmacSha1Hex(secretForSignature, raw);
       if (debug) console.log("[KIWIFY] sig expected:", maskToken(expectedSig));
 
       if (!timingSafeEq(receivedSig, expectedSig)) {
-        await tryInsertPayment(supabase, {
-          provider: "kiwify",
-          status: "rejected",
-          event: String(pickEvent(body) || ""),
-          norm: "invalid_signature",
-          raw: body,
-          created_at: new Date().toISOString(),
-          note: "invalid_signature",
-        });
-
         return res.status(401).json({
           ok: false,
           error: "Invalid signature",
           hint: debug
-            ? { received: maskToken(receivedSig), expected: maskToken(expectedSig) }
+            ? {
+                received: maskToken(receivedSig),
+                expected: maskToken(expectedSig),
+              }
             : undefined,
         });
       }
@@ -309,27 +342,24 @@ export default async function handler(req, res) {
       }
 
       if (!timingSafeEq(tokenReceived, tokenExpected)) {
-        await tryInsertPayment(supabase, {
-          provider: "kiwify",
-          status: "rejected",
-          event: String(pickEvent(body) || ""),
-          norm: "invalid_token",
-          raw: body,
-          created_at: new Date().toISOString(),
-          note: "invalid_token",
-        });
-
         return res.status(401).json({ ok: false, error: "Invalid webhook token" });
       }
     }
 
     const emailNorm = pickEmail(body);
-    const orderId = String(pickOrderId(body) || "").trim();
     const event = pickEvent(body);
     const status = pickStatus(body);
     const { isPaid, isBlocked, norm } = inferPaidBlocked(event, status);
 
     if (debug) {
+      const orderId =
+        body?.order_id ||
+        body?.orderId ||
+        body?.data?.order_id ||
+        body?.data?.orderId ||
+        body?.order?.id ||
+        body?.data?.order?.id ||
+        "";
       console.log("[KIWIFY] email:", emailNorm);
       console.log("[KIWIFY] orderId:", orderId);
       console.log("[KIWIFY] event:", event);
@@ -339,37 +369,27 @@ export default async function handler(req, res) {
     }
 
     if (!emailNorm) {
+      // se o email não veio no payload, não tem como liberar automaticamente
       await tryInsertPayment(supabase, {
+        email: null,
         provider: "kiwify",
-        status: "ignored",
+        status: isPaid ? "active" : isBlocked ? "inactive" : "ignored",
         event: String(event || ""),
         norm: String(norm || ""),
         raw: body,
         created_at: new Date().toISOString(),
         note: "missing_email_in_payload",
-        external_id: orderId || null,
       });
 
       return res.status(200).json({
         ok: true,
         ignored: true,
         reason: "missing_email_in_payload",
+        norm,
       });
     }
 
     if (!isPaid && !isBlocked) {
-      await tryInsertPayment(supabase, {
-        email: emailNorm,
-        provider: "kiwify",
-        status: "ignored",
-        event: String(event || ""),
-        norm: String(norm || ""),
-        raw: body,
-        created_at: new Date().toISOString(),
-        note: "ignored_unmatched_event_status",
-        external_id: orderId || null,
-      });
-
       return res.status(200).json({ ok: true, ignored: true, norm });
     }
 
@@ -391,7 +411,6 @@ export default async function handler(req, res) {
         raw: body,
         created_at: new Date().toISOString(),
         note: "profile_not_found",
-        external_id: orderId || null,
       });
 
       return res.status(200).json({
@@ -413,7 +432,6 @@ export default async function handler(req, res) {
         raw: body,
         created_at: new Date().toISOString(),
         note: "manual_access_protected",
-        external_id: orderId || null,
       });
 
       return res.status(200).json({
@@ -456,7 +474,6 @@ export default async function handler(req, res) {
       access_until: updated?.access_until || updates.access_until,
       raw: body,
       created_at: new Date().toISOString(),
-      external_id: orderId || null,
     });
 
     return res.status(200).json({ ok: true, updated, norm });
