@@ -1,3 +1,8 @@
+// =========================
+// App.jsx — PARTE 1/2
+// (com: trocar senha + badge melhor + ajuste mobile do perfil)
+// =========================
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 
@@ -23,12 +28,15 @@ export default function App() {
     return "light";
   });
 
-  // ✅ NOVO: menu avatar + modal perfil
+  // Menu avatar + modal perfil
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const avatarRef = useRef(null);
   const [fullNameDraft, setFullNameDraft] = useState("");
+
+  // ✅ NOVO: trocar senha (envia link por email)
+  const [sendingPwd, setSendingPwd] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("gfd_theme", theme);
@@ -68,6 +76,7 @@ export default function App() {
       accent: "#2563EB",
       accent2: "#22C55E",
       warn: "#F97316",
+      danger: "#EF4444",
       controlBg: dark ? "rgba(2,6,23,0.35)" : "rgba(255,255,255,0.9)",
       controlBg2: dark ? "rgba(2,6,23,0.55)" : "rgba(255,255,255,1)",
       focusRing: dark
@@ -93,6 +102,7 @@ export default function App() {
     r.setProperty("--accent", tokens.accent);
     r.setProperty("--accent2", tokens.accent2);
     r.setProperty("--warn", tokens.warn);
+    r.setProperty("--danger", tokens.danger);
     r.setProperty("--controlBg", tokens.controlBg);
     r.setProperty("--controlBg2", tokens.controlBg2);
     r.setProperty("--focusRing", tokens.focusRing);
@@ -151,7 +161,7 @@ export default function App() {
   const accessInfo = useMemo(() => computeAccessInfo(profile), [profile]);
   const canWrite = accessInfo.canWrite;
 
-  // ✅ NOVO: saudação
+  // Saudação
   const greetingName = useMemo(() => {
     const full = String(profile?.full_name || "").trim();
     const first = full.split(/\s+/).filter(Boolean)[0];
@@ -173,9 +183,7 @@ export default function App() {
         updated_at: new Date().toISOString(),
       };
       await supabase.from("profiles").upsert(payload, { onConflict: "id" });
-    } catch {
-      // silencioso (se RLS impedir, tudo bem — webhook/trigger pode cuidar)
-    }
+    } catch {}
   }
 
   async function fetchProfile(u, { force = false } = {}) {
@@ -193,11 +201,7 @@ export default function App() {
     setProfileErr(null);
 
     async function trySelect(cols) {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(cols)
-        .eq("id", u.id)
-        .maybeSingle();
+      const { data, error } = await supabase.from("profiles").select(cols).eq("id", u.id).maybeSingle();
       if (error) throw error;
       return data ?? null;
     }
@@ -238,10 +242,7 @@ export default function App() {
         } catch (e3) {
           setProfile(undefined);
           setProfileErr(
-            e3?.message ||
-              e2?.message ||
-              e1?.message ||
-              "Não foi possível verificar seu acesso."
+            e3?.message || e2?.message || e1?.message || "Não foi possível verificar seu acesso."
           );
         }
       }
@@ -280,8 +281,6 @@ export default function App() {
 
   useEffect(() => {
     if (!user || user === null) return;
-
-    // Se estiver em modo leitura, revalida automaticamente pra liberar assim que o webhook atualizar
     if (canWrite) return;
 
     const t = setInterval(() => {
@@ -291,7 +290,7 @@ export default function App() {
     return () => clearInterval(t);
   }, [user, canWrite]);
 
-  // ✅ NOVO: fechar dropdown ao clicar fora
+  // Fechar dropdown ao clicar fora
   useEffect(() => {
     function onDoc(e) {
       if (!avatarOpen) return;
@@ -302,17 +301,14 @@ export default function App() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [avatarOpen]);
 
-  // ✅ NOVO: manter draft sincronizado quando abrir modal
+  // Draft sincronizado quando abrir modal
   useEffect(() => {
     if (profileModalOpen) setFullNameDraft(String(profile?.full_name || ""));
   }, [profileModalOpen, profile?.full_name]);
 
   function fmtBRDateTime(d) {
     try {
-      return new Intl.DateTimeFormat("pt-BR", {
-        dateStyle: "short",
-        timeStyle: "short",
-      }).format(d);
+      return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(d);
     } catch {
       return d ? String(d) : "";
     }
@@ -362,7 +358,6 @@ export default function App() {
       setProfile(undefined);
       setProfileErr(null);
 
-      // Força o reload no desktop (resolve casos onde o botão "Sair" parece não fazer nada)
       window.location.assign("/");
     } catch (e) {
       alert(e?.message || "Não foi possível sair. Tente novamente.");
@@ -371,7 +366,7 @@ export default function App() {
     }
   }
 
-  // ✅ NOVO: salvar nome no perfil
+  // Salvar nome no perfil
   async function saveProfileName() {
     if (!user?.id) return;
     const name = String(fullNameDraft || "").trim();
@@ -394,7 +389,31 @@ export default function App() {
     }
   }
 
-  // ✅ NOVO: iniciais do avatar
+  // ✅ NOVO: enviar link para troca de senha
+  async function sendPasswordReset() {
+    const email = String(user?.email || "").trim();
+    if (!email) return;
+
+    setSendingPwd(true);
+    try {
+      const redirectTo =
+        (typeof import.meta !== "undefined" &&
+          import.meta.env &&
+          import.meta.env.VITE_GFD_RESET_URL) ||
+        `${window.location.origin}/`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw error;
+
+      alert("Pronto! Enviamos um link para trocar a senha no seu e-mail.");
+    } catch (e) {
+      alert(e?.message || "Não foi possível enviar o link de troca de senha.");
+    } finally {
+      setSendingPwd(false);
+    }
+  }
+
+  // Iniciais do avatar
   const avatarInitials = useMemo(() => {
     const base = String(profile?.full_name || user?.email || "U").trim();
     const parts = base.split(/\s+/).filter(Boolean);
@@ -433,14 +452,7 @@ export default function App() {
           <div style={{ fontWeight: 1000, fontSize: 16 }}>
             Não foi possível verificar seu acesso
           </div>
-          <div
-            style={{
-              marginTop: 8,
-              color: "var(--muted)",
-              fontWeight: 900,
-              lineHeight: 1.4,
-            }}
-          >
+          <div style={{ marginTop: 8, color: "var(--muted)", fontWeight: 900, lineHeight: 1.4 }}>
             {profileErr}
           </div>
 
@@ -475,8 +487,8 @@ export default function App() {
               lineHeight: 1.4,
             }}
           >
-            Estou tentando criar automaticamente agora. Se mesmo assim não aparecer, seu
-            Supabase pode estar sem política/trigger para perfis.
+            Estou tentando criar automaticamente agora. Se mesmo assim não aparecer, seu Supabase
+            pode estar sem política/trigger para perfis.
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
@@ -548,43 +560,32 @@ export default function App() {
       </div>
     );
   }
-
   return (
     <div style={styles.page}>
       <div style={styles.shell}>
         <header style={styles.topbar}>
           <div style={styles.brand}>
             <LogoMark />
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={styles.brandTitle}>GFD</div>
               <div style={styles.brandSub}>Gestão Financeira Descomplicada</div>
             </div>
 
-            {/* ✅ NOVO: saudação no topo (global) */}
             <div style={styles.greeting} title={user?.email || ""}>
               {greeting}
             </div>
 
-            {!canWrite ? (
-              <span
-                style={{
-                  marginLeft: 10,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  border: "1px solid rgba(239,68,68,0.35)",
-                  background: "rgba(239,68,68,0.12)",
-                  fontWeight: 1000,
-                  fontSize: 12,
-                  color: "var(--text)",
-                }}
-                title="Conta em modo leitura"
-              >
-                🔒 Modo leitura
+            <span style={badgeStyle(canWrite)} title={canWrite ? "Assinatura ativa" : "Modo leitura"}>
+              <span style={{ fontSize: 14, lineHeight: 1 }}>
+                {canWrite ? "✅" : "🔒"}
               </span>
-            ) : null}
+              {canWrite ? "Ativo" : "Modo leitura"}
+              {accessInfo?.until ? (
+                <span style={{ opacity: 0.85, fontWeight: 900 }}>
+                  • até {fmtBRDateOnly(accessInfo.until)}
+                </span>
+              ) : null}
+            </span>
           </div>
 
           <div style={styles.topbarActions}>
@@ -602,7 +603,6 @@ export default function App() {
               {tokens.dark ? "🌙 Dark" : "☀️ Light"}
             </button>
 
-            {/* ✅ NOVO: avatar com menu (substitui o “Sair” visível, mas mantém função) */}
             <div style={styles.avatarWrap} ref={avatarRef}>
               <button
                 onClick={() => setAvatarOpen((v) => !v)}
@@ -652,6 +652,19 @@ export default function App() {
                   </button>
 
                   <div style={styles.menuSep} />
+
+                  <button
+                    style={styles.menuItem}
+                    role="menuitem"
+                    disabled={sendingPwd}
+                    onClick={() => {
+                      setAvatarOpen(false);
+                      setProfileModalOpen(true);
+                    }}
+                    title="Abrir perfil para trocar senha"
+                  >
+                    🔑 Trocar senha
+                  </button>
 
                   <button
                     style={{ ...styles.menuItem, ...styles.menuDanger }}
@@ -732,7 +745,6 @@ export default function App() {
         </footer>
       </div>
 
-      {/* ✅ NOVO: Modal Perfil */}
       {profileModalOpen ? (
         <div
           style={styles.modalBackdrop}
@@ -741,32 +753,79 @@ export default function App() {
           aria-modal="true"
         >
           <div style={styles.modal} onMouseDown={(e) => e.stopPropagation()}>
-            <div style={styles.modalTitle}>Perfil</div>
-
-            <div style={styles.modalField}>
-              <div style={styles.modalLabel}>Nome</div>
-              <input
-                value={fullNameDraft}
-                onChange={(e) => setFullNameDraft(e.target.value)}
-                placeholder="Seu nome"
-                style={styles.modalInput}
-              />
+            <div style={styles.modalHeader}>
+              <div style={styles.modalTitle}>Perfil</div>
+              <button style={styles.modalClose} onClick={() => setProfileModalOpen(false)} aria-label="Fechar">
+                ✕
+              </button>
             </div>
 
-            <div style={styles.modalField}>
-              <div style={styles.modalLabel}>E-mail</div>
-              <input value={String(user?.email || "")} disabled style={styles.modalInput} />
-            </div>
-
-            <div style={styles.modalField}>
-              <div style={styles.modalLabel}>Assinatura</div>
-              <div style={{ fontWeight: 1000 }}>
-                {canWrite ? "Ativa" : "Inativa (modo leitura)"}
-                {accessInfo?.until ? ` • até ${fmtBRDateOnly(accessInfo.until)}` : ""}
+            <div style={styles.modalGrid}>
+              <div style={styles.modalField}>
+                <div style={styles.modalLabel}>Nome</div>
+                <input
+                  value={fullNameDraft}
+                  onChange={(e) => setFullNameDraft(e.target.value)}
+                  placeholder="Seu nome"
+                  style={styles.modalInput}
+                />
               </div>
-              <div style={{ marginTop: 6, color: "var(--muted)", fontWeight: 850 }}>
-                Origem: {String(profile?.access_origin || "—")} • Status:{" "}
-                {String(profile?.subscription_status || profile?.access_status || "—")}
+
+              <div style={styles.modalField}>
+                <div style={styles.modalLabel}>E-mail</div>
+                <input value={String(user?.email || "")} disabled style={styles.modalInput} />
+              </div>
+
+              <div style={styles.modalFieldFull}>
+                <div style={styles.modalLabel}>Assinatura</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={badgeStyle(canWrite)}>
+                    <span style={{ fontSize: 14, lineHeight: 1 }}>
+                      {canWrite ? "✅" : "🔒"}
+                    </span>
+                    {canWrite ? "Ativa" : "Inativa (modo leitura)"}
+                    {accessInfo?.until ? (
+                      <span style={{ opacity: 0.85, fontWeight: 900 }}>
+                        • até {fmtBRDateOnly(accessInfo.until)}
+                      </span>
+                    ) : null}
+                  </span>
+
+                  <button onClick={openRenew} style={styles.ghostBtn}>
+                    {canWrite ? "Gerenciar" : "Ativar / Renovar"}
+                  </button>
+
+                  <button
+                    onClick={() => fetchProfile(user, { force: true })}
+                    style={styles.ghostBtn}
+                    disabled={checkingProfile}
+                    title="Atualizar status"
+                  >
+                    {checkingProfile ? "Atualizando..." : "Atualizar status"}
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 8, color: "var(--muted)", fontWeight: 850, lineHeight: 1.35 }}>
+                  Origem: {String(profile?.access_origin || "—")} • Status:{" "}
+                  {String(profile?.subscription_status || profile?.access_status || "—")}
+                </div>
+              </div>
+
+              <div style={styles.modalFieldFull}>
+                <div style={styles.modalLabel}>Segurança</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    style={styles.primaryBtn}
+                    onClick={sendPasswordReset}
+                    disabled={sendingPwd}
+                    title="Envia um link no seu e-mail para trocar a senha"
+                  >
+                    {sendingPwd ? "Enviando..." : "🔑 Enviar link para trocar senha"}
+                  </button>
+                </div>
+                <div style={{ marginTop: 8, color: "var(--muted)", fontWeight: 850, lineHeight: 1.35 }}>
+                  Você receberá um e-mail do Supabase com um link para redefinir a senha.
+                </div>
               </div>
             </div>
 
@@ -774,12 +833,16 @@ export default function App() {
               <button
                 style={styles.ghostBtn}
                 onClick={() => setProfileModalOpen(false)}
-                disabled={savingProfile}
+                disabled={savingProfile || sendingPwd}
               >
-                Cancelar
+                Fechar
               </button>
-              <button style={styles.primaryBtn} onClick={saveProfileName} disabled={savingProfile}>
-                {savingProfile ? "Salvando..." : "Salvar"}
+              <button
+                style={styles.primaryBtn}
+                onClick={saveProfileName}
+                disabled={savingProfile || sendingPwd}
+              >
+                {savingProfile ? "Salvando..." : "Salvar nome"}
               </button>
             </div>
           </div>
@@ -803,6 +866,31 @@ function tabStyle(active) {
     transition: "transform 120ms ease, background 120ms ease",
     outline: "none",
     minWidth: 160,
+  };
+}
+
+function badgeStyle(isActive) {
+  const border = isActive ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)";
+  const bg = isActive
+    ? "linear-gradient(135deg, rgba(34,197,94,0.18), rgba(37,99,235,0.10))"
+    : "linear-gradient(135deg, rgba(239,68,68,0.18), rgba(249,115,22,0.08))";
+
+  return {
+    marginLeft: 10,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "7px 10px",
+    borderRadius: 999,
+    border: `1px solid ${border}`,
+    background: bg,
+    fontWeight: 1000,
+    fontSize: 12.5,
+    color: "var(--text)",
+    whiteSpace: "nowrap",
+    maxWidth: "100%",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   };
 }
 
@@ -872,6 +960,7 @@ const styles = {
     fontWeight: 1000,
     fontSize: 13,
     letterSpacing: -0.15,
+    whiteSpace: "nowrap",
   },
 
   topbarActions: {
@@ -967,7 +1056,7 @@ const styles = {
     animation: "gfdSpin 1s linear infinite",
   },
 
-  // ✅ NOVO: avatar/menu/modal
+  // Avatar/menu/modal
   avatarWrap: { position: "relative" },
   avatarBtn: {
     border: "1px solid var(--border)",
@@ -1027,6 +1116,8 @@ const styles = {
   },
   modal: {
     width: "min(560px, 96vw)",
+    maxHeight: "min(84vh, 720px)",
+    overflow: "auto",
     borderRadius: 18,
     border: "1px solid var(--border)",
     background: "var(--card)",
@@ -1035,8 +1126,30 @@ const styles = {
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
   },
-  modalTitle: { fontWeight: 1100, fontSize: 16, letterSpacing: -0.2, marginBottom: 12 },
-  modalField: { marginBottom: 12 },
+  modalHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
+  modalTitle: { fontWeight: 1100, fontSize: 16, letterSpacing: -0.2 },
+  modalClose: {
+    border: "1px solid var(--border)",
+    background: "rgba(255,255,255,0.06)",
+    color: "var(--text)",
+    borderRadius: 12,
+    padding: "8px 10px",
+    cursor: "pointer",
+    fontWeight: 950,
+  },
+  modalGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+  modalField: { marginBottom: 0, minWidth: 0 },
+  modalFieldFull: { gridColumn: "1 / -1" },
   modalLabel: { fontSize: 12, color: "var(--muted)", fontWeight: 900, marginBottom: 6 },
   modalInput: {
     width: "100%",
@@ -1047,8 +1160,15 @@ const styles = {
     color: "var(--text)",
     outline: "none",
     fontWeight: 900,
+    minWidth: 0,
   },
-  modalActions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 },
+  modalActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 14,
+    flexWrap: "wrap",
+  },
 };
 
 function LogoMark() {
@@ -1117,6 +1237,9 @@ if (typeof document !== "undefined") {
         -webkit-box-shadow: 0 0 0px 1000px var(--controlBg) inset !important;
         caret-color: var(--text) !important;
         transition: background-color 9999s ease-in-out 0s;
+      }
+      @media (max-width: 520px) {
+        .gfd-hide-mobile { display: none !important; }
       }
     `;
     document.head.appendChild(style);
