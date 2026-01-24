@@ -6,6 +6,92 @@ import Dashboard from "./Dashboard";
 import Relatorios from "./Relatorios";
 import Metas from "./Metas";
 
+// ✅ MENU DO AVATAR EM PORTAL (fora do fluxo normal, nunca corta)
+function AvatarMenuPortal({ anchorEl, dir = "right", onClose, children }) {
+  const menuRef = useRef(null);
+  const [pos, setPos] = useState(null);
+
+  function calc() {
+    if (!anchorEl) return;
+
+    const r = anchorEl.getBoundingClientRect();
+    const vw = window.innerWidth || 360;
+    const vh = window.innerHeight || 640;
+
+    const pad = 10;
+    const menuW = Math.min(280, vw - pad * 2);
+    const menuH = menuRef.current?.getBoundingClientRect?.().height || 260;
+
+    let x =
+      dir === "right"
+        ? Math.min(vw - menuW - pad, Math.max(pad, r.right - menuW))
+        : Math.min(vw - menuW - pad, Math.max(pad, r.left));
+
+    let y = r.bottom + 8;
+
+    if (y + menuH + pad > vh) {
+      y = Math.max(pad, r.top - menuH - 8);
+    }
+
+    setPos({ x, y, w: menuW });
+  }
+
+  useEffect(() => {
+    calc();
+    window.addEventListener("resize", calc);
+    window.addEventListener("scroll", calc, true);
+    return () => {
+      window.removeEventListener("resize", calc);
+      window.removeEventListener("scroll", calc, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorEl, dir]);
+
+  useEffect(() => {
+    if (!pos) return;
+    const t = setTimeout(calc, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos?.x, pos?.y, pos?.w]);
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") onClose?.();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  if (!pos) return null;
+
+  return (
+    <div
+      data-gfd-avatar-menu="1"
+      style={{ position: "fixed", inset: 0, zIndex: 8000 }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div
+        ref={menuRef}
+        style={{
+          position: "absolute",
+          left: pos.x,
+          top: pos.y,
+          width: pos.w,
+          borderRadius: 16,
+          border: "1px solid var(--border)",
+          background: "var(--card)",
+          boxShadow: "var(--shadowSoft)",
+          overflow: "hidden",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(undefined);
   const [tab, setTab] = useState("dashboard");
@@ -23,18 +109,14 @@ export default function App() {
     return "light";
   });
 
-  // Menu avatar + modal perfil
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const avatarRef = useRef(null);
-  const avatarBtnRef = useRef(null); // ✅ âncora real do botão (para portal)
+  const avatarBtnRef = useRef(null);
   const [fullNameDraft, setFullNameDraft] = useState("");
 
-  // Trocar senha (envia link por email)
   const [sendingPwd, setSendingPwd] = useState(false);
-
-  // ✅ menu do avatar “smart” (não corta)
   const [avatarDir, setAvatarDir] = useState("right"); // right | left
 
   useEffect(() => {
@@ -160,7 +242,6 @@ export default function App() {
   const accessInfo = useMemo(() => computeAccessInfo(profile), [profile]);
   const canWrite = accessInfo.canWrite;
 
-  // Saudação
   const greetingName = useMemo(() => {
     const full = String(profile?.full_name || "").trim();
     const first = full.split(/\s+/).filter(Boolean)[0];
@@ -296,16 +377,13 @@ export default function App() {
     return () => clearInterval(t);
   }, [user, canWrite]);
 
-  // ✅ fechar dropdown ao clicar fora (sem cortar com portal)
   useEffect(() => {
     function onDoc(e) {
       if (!avatarOpen) return;
 
-      // clique dentro do menu portal
       const insidePortalMenu = !!e?.target?.closest?.('[data-gfd-avatar-menu="1"]');
       if (insidePortalMenu) return;
 
-      // clique dentro do wrapper do avatar
       if (avatarRef.current && avatarRef.current.contains(e.target)) return;
 
       setAvatarOpen(false);
@@ -314,7 +392,6 @@ export default function App() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [avatarOpen]);
 
-  // decidir se o menu abre pra direita ou esquerda (pra não cortar)
   useEffect(() => {
     function computeDir() {
       try {
@@ -332,7 +409,6 @@ export default function App() {
     return () => window.removeEventListener("resize", computeDir);
   }, []);
 
-  // Draft sincronizado quando abrir modal
   useEffect(() => {
     if (profileModalOpen) setFullNameDraft(String(profile?.full_name || ""));
   }, [profileModalOpen, profile?.full_name]);
@@ -397,7 +473,6 @@ export default function App() {
     }
   }
 
-  // Salvar nome no perfil
   async function saveProfileName() {
     if (!user?.id) return;
     const name = String(fullNameDraft || "").trim();
@@ -420,7 +495,6 @@ export default function App() {
     }
   }
 
-  // Enviar link para troca de senha
   async function sendPasswordReset() {
     const email = String(user?.email || "").trim();
     if (!email) return;
@@ -444,7 +518,6 @@ export default function App() {
     }
   }
 
-  // Iniciais do avatar
   const avatarInitials = useMemo(() => {
     const base = String(profile?.full_name || user?.email || "U").trim();
     const parts = base.split(/\s+/).filter(Boolean);
@@ -591,6 +664,7 @@ export default function App() {
       </div>
     );
   }
+
   return (
     <div style={styles.page}>
       <div style={styles.shell}>
@@ -709,10 +783,9 @@ export default function App() {
         </footer>
       </div>
 
-      {/* ✅ MENU DO AVATAR EM PORTAL (fora do shell), pra NUNCA ser cortado por overflow */}
       {avatarOpen && (
         <AvatarMenuPortal
-          anchorEl={avatarBtnRef.current}
+          anchorEl={avatarBtnRef.current || avatarRef.current}
           dir={avatarDir}
           onClose={() => setAvatarOpen(false)}
         >
@@ -931,96 +1004,6 @@ function badgeStyle(isActive) {
   };
 }
 
-// ✅ MENU DO AVATAR EM PORTAL (fora do fluxo normal, nunca corta)
-function AvatarMenuPortal({ anchorEl, dir = "right", onClose, children }) {
-  const menuRef = useRef(null);
-  const [pos, setPos] = useState(null);
-
-  function calc() {
-    if (!anchorEl) return;
-
-    const r = anchorEl.getBoundingClientRect();
-    const vw = window.innerWidth || 360;
-    const vh = window.innerHeight || 640;
-
-    const pad = 10;
-    const menuW = Math.min(280, vw - pad * 2);
-    const menuH = menuRef.current?.getBoundingClientRect?.().height || 260;
-
-    let x =
-      dir === "right"
-        ? Math.min(vw - menuW - pad, Math.max(pad, r.right - menuW))
-        : Math.min(vw - menuW - pad, Math.max(pad, r.left));
-
-    let y = r.bottom + 8;
-
-    // se não couber embaixo, abre pra cima
-    if (y + menuH + pad > vh) {
-      y = Math.max(pad, r.top - menuH - 8);
-    }
-
-    setPos({ x, y, w: menuW });
-  }
-
-  useEffect(() => {
-    calc();
-    window.addEventListener("resize", calc);
-    window.addEventListener("scroll", calc, true);
-    return () => {
-      window.removeEventListener("resize", calc);
-      window.removeEventListener("scroll", calc, true);
-    };
-  }, [anchorEl, dir]);
-
-  // recalcula depois que renderizar (altura real conhecida)
-  useEffect(() => {
-    if (!pos) return;
-    const t = setTimeout(calc, 0);
-    return () => clearTimeout(t);
-  }, [pos?.x, pos?.y, pos?.w]);
-
-  // ESC fecha
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") onClose?.();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  if (!pos) return null;
-
-  return (
-    <div
-      data-gfd-avatar-menu="1"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 8000,
-      }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
-      }}
-    >
-      <div
-        ref={menuRef}
-        style={{
-          position: "absolute",
-          left: pos.x,
-          top: pos.y,
-          width: pos.w,
-          borderRadius: 16,
-          border: "1px solid var(--border)",
-          background: "var(--card)",
-          boxShadow: "var(--shadowSoft)",
-          overflow: "hidden",
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
 
 const styles = {
   page: {
@@ -1165,6 +1148,27 @@ const styles = {
     width: "100%",
   },
 
+  centerCard: {
+    maxWidth: 560,
+    margin: "0 auto",
+    marginTop: 110,
+    padding: 18,
+    border: "1px solid var(--border)",
+    borderRadius: 18,
+    background: "var(--card)",
+    boxShadow: "var(--shadowSoft)",
+  },
+
+  spinner: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    border: "3px solid rgba(148,163,184,0.35)",
+    borderTopColor: "var(--accent)",
+    margin: "0 auto",
+    animation: "gfdSpin 1s linear infinite",
+  },
+
   avatarWrap: { position: "relative" },
   avatarBtn: {
     border: "1px solid var(--border)",
@@ -1223,6 +1227,129 @@ const styles = {
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
   },
+  modalHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
+  modalTitle: { fontWeight: 1100, fontSize: 16, letterSpacing: -0.2 },
+  modalClose: {
+    border: "1px solid var(--border)",
+    background: "rgba(255,255,255,0.06)",
+    color: "var(--text)",
+    borderRadius: 12,
+    padding: "8px 10px",
+    cursor: "pointer",
+    fontWeight: 950,
+  },
+  modalGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+  modalField: { marginBottom: 0, minWidth: 0 },
+  modalFieldFull: { gridColumn: "1 / -1" },
+  modalLabel: { fontSize: 12, color: "var(--muted)", fontWeight: 900, marginBottom: 6 },
+  modalInput: {
+    width: "100%",
+    padding: 12,
+    borderRadius: 14,
+    border: "1px solid var(--border)",
+    background: "var(--controlBg2)",
+    color: "var(--text)",
+    outline: "none",
+    fontWeight: 900,
+    minWidth: 0,
+  },
+  modalActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 14,
+    flexWrap: "wrap",
+  },
 };
 
-// Logo + estilos globais permanecem IGUAIS ao seu arquivo original
+function LogoMark() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#2563EB" />
+          <stop offset="1" stopColor="#22C55E" />
+        </linearGradient>
+      </defs>
+      <rect x="6" y="6" width="52" height="52" rx="16" fill="url(#g)" opacity="0.92" />
+      <path
+        d="M20 34c6-8 18-8 24 0"
+        fill="none"
+        stroke="rgba(255,255,255,0.92)"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <path
+        d="M22 26h20"
+        fill="none"
+        stroke="rgba(255,255,255,0.85)"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <circle cx="24" cy="40" r="2.6" fill="rgba(255,255,255,0.92)" />
+      <circle cx="40" cy="40" r="2.6" fill="rgba(255,255,255,0.92)" />
+    </svg>
+  );
+}
+
+if (typeof document !== "undefined") {
+  const id = "gfd-global-style";
+  if (!document.getElementById(id)) {
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+      @keyframes gfdSpin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body, #root {
+        min-height: 100%;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        overflow-x: hidden;
+      }
+      #root { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+
+      :root { color-scheme: light dark; }
+      html.dark { color-scheme: dark; }
+      html.light { color-scheme: light; }
+
+      button:hover { transform: translateY(-1px); }
+      button:focus { box-shadow: var(--focusRing); }
+
+      input:focus, select:focus, textarea:focus { box-shadow: var(--focusRing); outline: none; }
+      input, select, textarea {
+        background: var(--controlBg);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      input:-webkit-autofill,
+      textarea:-webkit-autofill,
+      select:-webkit-autofill {
+        -webkit-text-fill-color: var(--text) !important;
+        box-shadow: 0 0 0px 1000px var(--controlBg) inset !important;
+        -webkit-box-shadow: 0 0 0px 1000px var(--controlBg) inset !important;
+        caret-color: var(--text) !important;
+        transition: background-color 9999s ease-in-out 0s;
+      }
+
+      @media (max-width: 520px) {
+        .gfd-hide-mobile { display: none !important; }
+        button { max-width: 100%; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
