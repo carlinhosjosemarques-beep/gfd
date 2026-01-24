@@ -1,8 +1,3 @@
-// =========================
-// App.jsx — PARTE 1/2
-// (com: trocar senha + badge melhor + ajuste mobile do perfil)
-// =========================
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 
@@ -35,8 +30,11 @@ export default function App() {
   const avatarRef = useRef(null);
   const [fullNameDraft, setFullNameDraft] = useState("");
 
-  // ✅ NOVO: trocar senha (envia link por email)
+  // Trocar senha (envia link por email)
   const [sendingPwd, setSendingPwd] = useState(false);
+
+  // ✅ NOVO: menu do avatar “smart” (não corta no mobile)
+  const [avatarDir, setAvatarDir] = useState("right"); // right | left
 
   useEffect(() => {
     localStorage.setItem("gfd_theme", theme);
@@ -201,7 +199,11 @@ export default function App() {
     setProfileErr(null);
 
     async function trySelect(cols) {
-      const { data, error } = await supabase.from("profiles").select(cols).eq("id", u.id).maybeSingle();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(cols)
+        .eq("id", u.id)
+        .maybeSingle();
       if (error) throw error;
       return data ?? null;
     }
@@ -242,7 +244,10 @@ export default function App() {
         } catch (e3) {
           setProfile(undefined);
           setProfileErr(
-            e3?.message || e2?.message || e1?.message || "Não foi possível verificar seu acesso."
+            e3?.message ||
+              e2?.message ||
+              e1?.message ||
+              "Não foi possível verificar seu acesso."
           );
         }
       }
@@ -300,6 +305,23 @@ export default function App() {
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [avatarOpen]);
+
+  // ✅ NOVO: decidir se o menu abre pra direita ou esquerda (pra não cortar)
+  useEffect(() => {
+    function computeDir() {
+      try {
+        if (!avatarRef.current) return;
+        const r = avatarRef.current.getBoundingClientRect();
+        const menuW = Math.min(280, window.innerWidth - 24);
+        const spaceRight = window.innerWidth - r.right;
+        const spaceLeft = r.left;
+        setAvatarDir(spaceRight >= menuW ? "right" : spaceLeft >= menuW ? "left" : "right");
+      } catch {}
+    }
+    computeDir();
+    window.addEventListener("resize", computeDir);
+    return () => window.removeEventListener("resize", computeDir);
+  }, []);
 
   // Draft sincronizado quando abrir modal
   useEffect(() => {
@@ -389,7 +411,7 @@ export default function App() {
     }
   }
 
-  // ✅ NOVO: enviar link para troca de senha
+  // Enviar link para troca de senha
   async function sendPasswordReset() {
     const email = String(user?.email || "").trim();
     if (!email) return;
@@ -560,6 +582,7 @@ export default function App() {
       </div>
     );
   }
+
   return (
     <div style={styles.page}>
       <div style={styles.shell}>
@@ -576,9 +599,7 @@ export default function App() {
             </div>
 
             <span style={badgeStyle(canWrite)} title={canWrite ? "Assinatura ativa" : "Modo leitura"}>
-              <span style={{ fontSize: 14, lineHeight: 1 }}>
-                {canWrite ? "✅" : "🔒"}
-              </span>
+              <span style={{ fontSize: 14, lineHeight: 1 }}>{canWrite ? "✅" : "🔒"}</span>
               {canWrite ? "Ativo" : "Modo leitura"}
               {accessInfo?.until ? (
                 <span style={{ opacity: 0.85, fontWeight: 900 }}>
@@ -605,7 +626,9 @@ export default function App() {
 
             <div style={styles.avatarWrap} ref={avatarRef}>
               <button
-                onClick={() => setAvatarOpen((v) => !v)}
+                onClick={() => {
+                  setAvatarOpen((v) => !v);
+                }}
                 style={styles.avatarBtn}
                 title="Menu do perfil"
                 aria-haspopup="menu"
@@ -615,7 +638,14 @@ export default function App() {
               </button>
 
               {avatarOpen ? (
-                <div style={styles.avatarMenu} role="menu">
+                <div
+                  style={{
+                    ...styles.avatarMenu,
+                    right: avatarDir === "right" ? 0 : "auto",
+                    left: avatarDir === "left" ? 0 : "auto",
+                  }}
+                  role="menu"
+                >
                   <button
                     style={styles.menuItem}
                     role="menuitem"
@@ -755,7 +785,11 @@ export default function App() {
           <div style={styles.modal} onMouseDown={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <div style={styles.modalTitle}>Perfil</div>
-              <button style={styles.modalClose} onClick={() => setProfileModalOpen(false)} aria-label="Fechar">
+              <button
+                style={styles.modalClose}
+                onClick={() => setProfileModalOpen(false)}
+                aria-label="Fechar"
+              >
                 ✕
               </button>
             </div>
@@ -780,9 +814,7 @@ export default function App() {
                 <div style={styles.modalLabel}>Assinatura</div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                   <span style={badgeStyle(canWrite)}>
-                    <span style={{ fontSize: 14, lineHeight: 1 }}>
-                      {canWrite ? "✅" : "🔒"}
-                    </span>
+                    <span style={{ fontSize: 14, lineHeight: 1 }}>{canWrite ? "✅" : "🔒"}</span>
                     {canWrite ? "Ativa" : "Inativa (modo leitura)"}
                     {accessInfo?.until ? (
                       <span style={{ opacity: 0.85, fontWeight: 900 }}>
@@ -988,11 +1020,16 @@ const styles = {
     boxShadow: "0 18px 40px rgba(0,0,0,0.18)",
   },
 
+  // ✅ CORREÇÃO DO “CORTADO NO FINAL”:
+  // - garante padding inferior (pra menus/ações no rodapé da tela não ficarem por baixo da UI do celular)
+  // - e permite overflow visível (pra dropdowns não serem cortados)
   content: {
     marginTop: 12,
     width: "100%",
     maxWidth: "100%",
     boxSizing: "border-box",
+    paddingBottom: "max(28px, env(safe-area-inset-bottom))",
+    overflow: "visible",
   },
 
   ghostBtn: {
@@ -1081,15 +1118,15 @@ const styles = {
   },
   avatarMenu: {
     position: "absolute",
-    right: 0,
     top: 48,
     minWidth: 240,
+    width: "min(280px, calc(100vw - 24px))",
     borderRadius: 16,
     border: "1px solid var(--border)",
     background: "var(--card)",
     boxShadow: "var(--shadowSoft)",
     overflow: "hidden",
-    zIndex: 50,
+    zIndex: 5000,
   },
   menuItem: {
     width: "100%",
@@ -1112,7 +1149,7 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     padding: 14,
-    zIndex: 90,
+    zIndex: 9000,
   },
   modal: {
     width: "min(560px, 96vw)",
@@ -1218,17 +1255,23 @@ if (typeof document !== "undefined") {
         background: var(--bg);
         overflow-x: hidden;
       }
+      /* ✅ deixa conteúdo respirar no fim no mobile */
+      #root { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+
       :root { color-scheme: light dark; }
       html.dark { color-scheme: dark; }
       html.light { color-scheme: light; }
+
       button:hover { transform: translateY(-1px); }
       button:focus { box-shadow: var(--focusRing); }
+
       input:focus, select:focus, textarea:focus { box-shadow: var(--focusRing); outline: none; }
       input, select, textarea {
         background: var(--controlBg);
         color: var(--text);
         border: 1px solid var(--border);
       }
+
       input:-webkit-autofill,
       textarea:-webkit-autofill,
       select:-webkit-autofill {
@@ -1238,8 +1281,11 @@ if (typeof document !== "undefined") {
         caret-color: var(--text) !important;
         transition: background-color 9999s ease-in-out 0s;
       }
+
       @media (max-width: 520px) {
         .gfd-hide-mobile { display: none !important; }
+        /* ✅ evita “quebrar” o topo e cortar badge/saudação em telas pequenas */
+        button { max-width: 100%; }
       }
     `;
     document.head.appendChild(style);

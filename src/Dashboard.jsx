@@ -967,6 +967,7 @@ export default function Dashboard({ canWrite } = {}) {
     fecharEditar();
     await carregarLancamentos();
   }
+
   const [editGroupOpen, setEditGroupOpen] = useState(false);
   const [grpRef, setGrpRef] = useState(null);
   const [grpDescricaoBase, setGrpDescricaoBase] = useState("");
@@ -1081,7 +1082,6 @@ export default function Dashboard({ canWrite } = {}) {
     if (m > 11) { m = 0; a++; }
     setMes(m); setAno(a);
   }
-
   useEffect(() => {
     function onKey(e) {
       if (e.key === "Escape") {
@@ -1651,6 +1651,7 @@ export default function Dashboard({ canWrite } = {}) {
             <div style={styles.kpiHint}>Considera saldo inicial + lançamentos pagos</div>
           </div>
         </div>
+
         {uiShowContas ? (
           <CollapseSection
             id="contas"
@@ -2343,8 +2344,27 @@ function PortalMenu({ anchorEl, children, onClose }) {
       const vh = window.innerHeight || 640;
 
       const desiredW = 260;
+
+      // ✅ evita "corte" no final: respeita altura do menu e mantém dentro da viewport (com safe-area)
+      const padTop = Math.max(10, Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gfd_safe_top")) || 0);
+      const padBottom = Math.max(10, Number.parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gfd_safe_bottom")) || 0);
+
+      // mede a altura estimada do menu (sem depender do children renderizado)
+      const estimatedMenuH = 6 * 44; // ~6 itens * 44px (aprox)
+      const maxY = vh - padBottom - estimatedMenuH;
+      const minY = padTop + 10;
+
       const x = Math.min(vw - desiredW - 10, Math.max(10, r.right - desiredW));
-      const y = Math.min(vh - 10, Math.max(10, r.bottom + 8));
+
+      // tenta abrir pra baixo, se não couber abre pra cima
+      let yDown = r.bottom + 8;
+      let y = yDown;
+
+      if (yDown + estimatedMenuH > vh - padBottom) {
+        y = r.top - 8 - estimatedMenuH;
+      }
+
+      y = Math.max(minY, Math.min(maxY, y));
 
       setPos({ x, y, w: desiredW });
     }
@@ -2370,14 +2390,24 @@ function PortalMenu({ anchorEl, children, onClose }) {
 
   return (
     <div
-      style={{ ...styles.menuOverlay, touchAction: "manipulation" }}
+      style={{
+        ...styles.menuOverlay,
+        // ✅ garante que o overlay tenha "respiro" e não deixe o menu encostar no fim (mobile)
+        padding:
+          "max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))",
+      }}
       data-gfd-portalmenu="1"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
       <div
-        style={{ ...styles.menuFloating, left: pos.x, top: pos.y, width: pos.w }}
+        style={{
+          ...styles.menuFloating,
+          left: pos.x,
+          top: pos.y,
+          width: pos.w,
+        }}
         data-gfd-portalmenu="1"
       >
         {children}
@@ -2704,6 +2734,17 @@ function globalCss() {
   --shadowSoft: 0 10px 24px rgba(0,0,0,.06);
   --danger: rgba(239,68,68,1);
   --controlBg2: rgba(255,255,255,.06);
+
+  /* usados no PortalMenu para evitar corte em mobile (safe area) */
+  --gfd_safe_top: 0;
+  --gfd_safe_bottom: 0;
+}
+
+@supports (padding: env(safe-area-inset-bottom)){
+  :root{
+    --gfd_safe_top: env(safe-area-inset-top);
+    --gfd_safe_bottom: env(safe-area-inset-bottom);
+  }
 }
 
 @media (max-width: 720px){
